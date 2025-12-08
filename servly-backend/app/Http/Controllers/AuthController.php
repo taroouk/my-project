@@ -3,24 +3,19 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Validator;
 use App\Models\User;
+use Illuminate\Support\Facades\Hash;
 
 class AuthController extends Controller
 {
     // Signup
     public function signup(Request $request)
     {
-        $validator = Validator::make($request->all(), [
+        $request->validate([
             'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users',
-            'password' => 'required|string|min:6|confirmed',
+            'email' => 'required|string|email|unique:users',
+            'password' => 'required|string|min:6',
         ]);
-
-        if ($validator->fails()) {
-            return response()->json($validator->errors(), 422);
-        }
 
         $user = User::create([
             'name' => $request->name,
@@ -28,20 +23,16 @@ class AuthController extends Controller
             'password' => Hash::make($request->password),
         ]);
 
-        return response()->json(['message' => 'User registered successfully', 'user' => $user], 201);
+        return response()->json(['message' => 'User created successfully', 'user' => $user], 201);
     }
 
     // Login
     public function login(Request $request)
     {
-        $validator = Validator::make($request->all(), [
-            'email' => 'required|string|email',
+        $request->validate([
+            'email' => 'required|email',
             'password' => 'required|string',
         ]);
-
-        if ($validator->fails()) {
-            return response()->json($validator->errors(), 422);
-        }
 
         $user = User::where('email', $request->email)->first();
 
@@ -49,9 +40,6 @@ class AuthController extends Controller
             return response()->json(['message' => 'Invalid credentials'], 401);
         }
 
-        // Generate token
-        $token = $user->createToken('auth_token')->plainTextToken;
-
-        return response()->json(['message' => 'Login successful', 'access_token' => $token, 'token_type' => 'Bearer']);
+        return response()->json(['message' => 'Login successful', 'user' => $user]);
     }
 }
