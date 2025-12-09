@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { supabase, Website } from '../lib/supabase'
+import { supabase, Website } from '../lib/supabaseClient'
 import { useAuth } from './useAuth'
 
 export function useWebsites() {

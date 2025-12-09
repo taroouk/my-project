@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { supabase, Employee } from '../lib/supabase'
+import { supabase, Employee } from '../lib/supabaseClient'
 import { useAuth } from './useAuth'
 
 export function useEmployees() {

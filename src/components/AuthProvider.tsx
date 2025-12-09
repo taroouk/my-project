@@ -1,7 +1,7 @@
 import React, { createContext, useContext, ReactNode } from 'react'
 import { useAuth } from '../hooks/useAuth'
 import { User as SupabaseUser, AuthError } from '@supabase/supabase-js'
-import { User } from '../lib/supabase'
+import { User } from '../lib/supabaseClient'
 
 interface AuthResponse<T = unknown> {
   data: T | null
