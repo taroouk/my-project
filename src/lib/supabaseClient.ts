@@ -3,29 +3,22 @@ import { createClient } from '@supabase/supabase-js'
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
-console.log('Supabase URL:', supabaseUrl);
-console.log('Supabase Key exists:', !!supabaseAnonKey);
-console.log('Full URL test:', `${supabaseUrl}/auth/v1/signup`);
-
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.error('Missing Supabase environment variables');
-  console.error('URL:', supabaseUrl);
-  console.error('Key:', supabaseAnonKey ? 'EXISTS' : 'MISSING');
+  console.error('Missing Supabase environment variables')
   throw new Error('Missing Supabase environment variables. Please check your .env file.')
 }
 
 // Test URL format
 try {
-  new URL(supabaseUrl);
-  console.log('✅ URL format is valid');
+  new URL(supabaseUrl)
 } catch (error) {
-  console.error('❌ Invalid URL format:', supabaseUrl);
-  throw new Error('Invalid Supabase URL format');
+  console.error('Invalid Supabase URL format:', supabaseUrl)
+  throw new Error('Invalid Supabase URL format')
 }
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
-// Database Types
+// ===== Database Types =====
 export interface User {
   id: string
   email: string
@@ -35,6 +28,9 @@ export interface User {
   subscription_plan: 'basic' | 'professional' | 'enterprise'
   created_at: string
 }
+
+// نوع البيانات عند الإضافة (insert)
+export type UserInsert = Omit<User, 'id' | 'created_at'>
 
 export interface Employee {
   id: string
@@ -46,6 +42,7 @@ export interface Employee {
   hire_date?: string
   created_at: string
 }
+export type EmployeeInsert = Omit<Employee, 'id' | 'created_at'>
 
 export interface Website {
   id: string
@@ -58,6 +55,7 @@ export interface Website {
   content?: any
   created_at: string
 }
+export type WebsiteInsert = Omit<Website, 'id' | 'created_at'>
 
 export interface LoyaltyProgram {
   id: string
@@ -69,6 +67,7 @@ export interface LoyaltyProgram {
   is_active: boolean
   created_at: string
 }
+export type LoyaltyProgramInsert = Omit<LoyaltyProgram, 'id' | 'created_at'>
 
 export interface Customer {
   id: string
@@ -80,3 +79,7 @@ export interface Customer {
   total_purchases: number
   created_at: string
 }
+export type CustomerInsert = Omit<Customer, 'id' | 'created_at'>
+
+// ===== Example Usage =====
+// const { data, error } = await supabase.from<User, UserInsert>('users').insert([{ email: 'a@b.com', subscription_plan: 'basic' }])
