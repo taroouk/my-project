@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Building2, Eye, EyeOff, Mail, Lock, User, Phone } from 'lucide-react';
-import { useAuthContext } from './AuthProvider';
+import { useAuth } from './AuthProvider';
 
 interface AuthPagesProps {
   onLogin: (isDemo?: boolean) => void;
@@ -9,7 +9,7 @@ interface AuthPagesProps {
 }
 
 const AuthPages: React.FC<AuthPagesProps> = ({ onLogin, isAdmin = false }) => {
-  const { signIn, signUp, loading } = useAuthContext();
+  const { signIn, signUp } = useAuth();
   const [currentPage, setCurrentPage] = useState<'login' | 'register'>('login');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -23,7 +23,7 @@ const AuthPages: React.FC<AuthPagesProps> = ({ onLogin, isAdmin = false }) => {
   });
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setError(null); // Clear error when user types
+    setError(null);
     setFormData(prev => ({
       ...prev,
       [e.target.name]: e.target.value
@@ -37,7 +37,6 @@ const AuthPages: React.FC<AuthPagesProps> = ({ onLogin, isAdmin = false }) => {
 
     try {
       if (isAdmin) {
-        // For admin, use simple check (you can enhance this later)
         if (formData.email === 'admin@servly.com' && formData.password === 'admin123') {
           onLogin(false);
         } else {
@@ -54,28 +53,28 @@ const AuthPages: React.FC<AuthPagesProps> = ({ onLogin, isAdmin = false }) => {
           onLogin(false);
         }
       } else {
-        // Registration
         if (!formData.name || !formData.company) {
           setError('يرجى ملء جميع الحقول المطلوبة');
           return;
         }
 
-        const { error } = await signUp(formData.email, formData.password, {
-          full_name: formData.name,
-          company_name: formData.company,
-          phone: formData.phone
-        });
+        // استدعاء signUp مع باراميترات صحيحة
+        const { error } = await signUp(
+          formData.email,
+          formData.password,
+          formData.name,
+          formData.phone
+        );
 
         if (error) {
-          console.error('Registration error:', error);
-          if (error.message.includes('already registered')) {
+          if (error.includes('already registered')) {
             setError('هذا البريد الإلكتروني مسجل مسبقاً');
-          } else if (error.message.includes('Invalid email')) {
+          } else if (error.includes('Invalid email')) {
             setError('البريد الإلكتروني غير صحيح');
-          } else if (error.message.includes('Password')) {
+          } else if (error.includes('Password')) {
             setError('كلمة المرور يجب أن تكون 6 أحرف على الأقل');
           } else {
-            setError(`خطأ في التسجيل: ${error.message}`);
+            setError(`خطأ في التسجيل: ${error}`);
           }
         } else {
           onLogin(false);
@@ -88,23 +87,9 @@ const AuthPages: React.FC<AuthPagesProps> = ({ onLogin, isAdmin = false }) => {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-950 dark:to-gray-900 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-16 h-16 bg-gradient-to-br from-purple-600 to-purple-800 rounded-3xl mx-auto mb-4 flex items-center justify-center animate-pulse">
-            <Building2 className="w-8 h-8 text-white" />
-          </div>
-          <p className="text-gray-600 dark:text-gray-300">جاري التحميل...</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-950 dark:to-gray-900 flex items-center justify-center p-4 text-gray-900 dark:text-gray-100">
       <div className="w-full max-w-md">
-        {/* Logo */}
         <div className="text-center mb-8">
           <div className="w-16 h-16 bg-gradient-to-br from-purple-600 to-purple-800 rounded-3xl mx-auto mb-4 flex items-center justify-center">
             <Building2 className="w-8 h-8 text-white" />
@@ -120,31 +105,30 @@ const AuthPages: React.FC<AuthPagesProps> = ({ onLogin, isAdmin = false }) => {
           </p>
         </div>
 
-        {/* Auth Card */}
         <div className="backdrop-blur-xl bg-white/80 dark:bg-gray-800/80 rounded-3xl border border-white/20 dark:border-gray-700 shadow-xl dark:shadow-none p-8">
-          {/* Tabs */}
-          {!isAdmin && <div className="flex mb-8 bg-gray-100 dark:bg-gray-700 rounded-2xl p-1">
-            <button
-              onClick={() => setCurrentPage('login')}
-              className={`flex-1 py-3 px-4 text-sm font-medium rounded-xl transition-all ${currentPage === 'login'
-                ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm'
-                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-                }`}
-            >
-              تسجيل الدخول
-            </button>
-            <button
-              onClick={() => setCurrentPage('register')}
-              className={`flex-1 py-3 px-4 text-sm font-medium rounded-xl transition-all ${currentPage === 'register'
-                ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm'
-                : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
-                }`}
-            >
-              إنشاء حساب
-            </button>
-          </div>}
+          {!isAdmin && (
+            <div className="flex mb-8 bg-gray-100 dark:bg-gray-700 rounded-2xl p-1">
+              <button
+                onClick={() => setCurrentPage('login')}
+                className={`flex-1 py-3 px-4 text-sm font-medium rounded-xl transition-all ${currentPage === 'login'
+                  ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                  }`}
+              >
+                تسجيل الدخول
+              </button>
+              <button
+                onClick={() => setCurrentPage('register')}
+                className={`flex-1 py-3 px-4 text-sm font-medium rounded-xl transition-all ${currentPage === 'register'
+                  ? 'bg-white dark:bg-gray-900 text-gray-900 dark:text-white shadow-sm'
+                  : 'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                  }`}
+              >
+                إنشاء حساب
+              </button>
+            </div>
+          )}
 
-          {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-6">
             {error && (
               <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl">
@@ -155,14 +139,12 @@ const AuthPages: React.FC<AuthPagesProps> = ({ onLogin, isAdmin = false }) => {
             {currentPage === 'register' && !isAdmin && (
               <>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    الاسم الكامل
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">الاسم الكامل</label>
                   <div className="relative">
                     <User className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                     <input
                       type="text"
-                      name="name" // Changed from "username" to "name" for consistency
+                      name="name"
                       value={formData.name}
                       onChange={handleInputChange}
                       className="w-full pr-12 pl-4 py-3 bg-white/60 border border-gray-200 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-colors"
@@ -173,9 +155,7 @@ const AuthPages: React.FC<AuthPagesProps> = ({ onLogin, isAdmin = false }) => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    اسم الشركة
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">اسم الشركة</label>
                   <div className="relative">
                     <Building2 className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                     <input
@@ -191,9 +171,7 @@ const AuthPages: React.FC<AuthPagesProps> = ({ onLogin, isAdmin = false }) => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    رقم الهاتف
-                  </label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">رقم الهاتف</label>
                   <div className="relative">
                     <Phone className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                     <input
@@ -233,9 +211,7 @@ const AuthPages: React.FC<AuthPagesProps> = ({ onLogin, isAdmin = false }) => {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                كلمة المرور
-              </label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">كلمة المرور</label>
               <div className="relative">
                 <Lock className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
                 <input
@@ -257,92 +233,21 @@ const AuthPages: React.FC<AuthPagesProps> = ({ onLogin, isAdmin = false }) => {
               </div>
             </div>
 
-            {currentPage === 'login' && !isAdmin && (
-              <div className="flex items-center justify-between">
-                <label className="flex items-center text-gray-600 dark:text-gray-300">
-                  <input type="checkbox" className="rounded border-gray-300 text-purple-600 focus:ring-purple-500" />
-                  <span className="mr-2 text-sm">تذكرني</span>
-                </label>
-                <button type="button" className="text-sm text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-purple-300 transition-colors">
-                  نسيت كلمة المرور؟
-                </button>
-              </div>
-            )}
-
-            {currentPage === 'register' && !isAdmin && (
-              <div className="flex items-start">
-                <input type="checkbox" className="rounded border-gray-300 dark:border-gray-600 text-purple-600 focus:ring-purple-500 mt-1" />
-                <span className="mr-2 text-sm text-gray-600 dark:text-gray-300">
-                  أوافق على
-                  <button type="button" className="text-purple-600 hover:text-purple-800 mx-1">شروط الخدمة</button>
-                  و
-                  <button type="button" className="text-purple-600 hover:text-purple-800 mx-1">سياسة الخصوصية</button>
-                </span>
-              </div>
-            )}
-
             <button
               type="submit"
               disabled={isSubmitting}
               className="w-full py-4 px-6 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-xl hover:from-purple-700 hover:to-purple-800 transition-colors font-medium shadow-lg hover:shadow-xl transform hover:scale-105 duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
             >
-              {isSubmitting ? (
-                <div className="flex items-center justify-center space-x-2">
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  <span>جاري المعالجة...</span>
-                </div>
-              ) : (
-                isAdmin ? 'دخول لوحة الإدارة' : currentPage === 'login' ? 'تسجيل الدخول' : 'إنشاء الحساب'
-              )}
+              {isSubmitting ? 'جاري المعالجة...' : (isAdmin ? 'دخول لوحة الإدارة' : currentPage === 'login' ? 'تسجيل الدخول' : 'إنشاء الحساب')}
             </button>
           </form>
-
-          {/* Social Login */}
-          {!isAdmin && <div className="mt-8">
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center text-gray-500 dark:text-gray-400">
-                <div className="w-full border-t border-gray-200 dark:border-gray-600"></div>
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-4 bg-white dark:bg-gray-800 text-gray-500 dark:text-gray-400">أو</span>
-              </div>
-            </div>
-
-            <div className="mt-6 grid grid-cols-2 gap-3">
-              <button className="w-full flex items-center justify-center px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Google</span>
-              </button>
-              <button className="w-full flex items-center justify-center px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Microsoft</span>
-              </button>
-            </div>
-          </div>}
-
-          {/* Demo Login */}
-          {!isAdmin && <div className="mt-8 p-4 bg-blue-50 rounded-xl border border-blue-200">
-            <h4 className="font-medium text-blue-900 mb-2">تجربة المنصة</h4>
-            <p className="text-sm text-blue-700 mb-3">
-              يمكنك تجربة المنصة مباشرة بالنقر على "دخول تجريبي"
-            </p>
-            <button
-              onClick={() => onLogin(true)}
-              className="w-full py-2 px-4 bg-blue-100 text-blue-800 rounded-lg hover:bg-blue-200 transition-colors font-medium"
-            >
-              دخول تجريبي
-            </button>
-          </div>}
 
           {/* Back Button */}
           <div className="mt-6 text-center">
             <Link to="/landing" className="text-purple-600 dark:text-purple-400 hover:text-purple-800 dark:hover:text-purple-300 text-sm">
-              {isAdmin ? 'العودة للصفحة الرئيسية' : 'العودة للصفحة الرئيسية'}
+              العودة للصفحة الرئيسية
             </Link>
           </div>
-        </div>
-
-        {/* Footer */}
-        <div className="text-center mt-8 text-sm text-gray-500">
-          <p className="dark:text-gray-400">&copy; 2024 Servly. جميع الحقوق محفوظة.</p>
         </div>
       </div>
     </div>

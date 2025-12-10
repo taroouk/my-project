@@ -1,10 +1,6 @@
 import { useState, useEffect } from 'react';
-import {
-  Building2, Users, Gift, Globe, CreditCard, BarChart3, Wallet, Home,
-  Phone, Mail, MapPin, Languages, MessageCircle, Sun, Moon
-} from 'lucide-react';
-
-import { useAuthContext } from './components/AuthProvider';
+import { Building2, Sun, Moon } from 'lucide-react';
+import { useAuth } from './components/AuthProvider';
 import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
 
 import HRDashboard from './components/HRDashboard';
@@ -29,15 +25,15 @@ function App() {
   const [showContactModal, setShowContactModal] = useState(false);
   const [isDemo, setIsDemo] = useState(false);
 
+  const { user, signOut } = useAuth();
+  const isAuthenticated = !!user || isDemo;
+  const navigate = useNavigate();
+  const { isDarkMode, toggleDarkMode } = useTheme();
+
   useEffect(() => {
     const demoStatus = localStorage.getItem('isDemo');
     if (demoStatus === 'true') setIsDemo(true);
   }, []);
-
-  const { user, userProfile, signOut } = useAuthContext();
-  const isAuthenticated = !!user || isDemo;
-  const navigate = useNavigate();
-  const { isDarkMode, toggleDarkMode } = useTheme();
 
   const handleLogin = (type: 'client' | 'admin', demo: boolean = false) => {
     setUserType(type);
@@ -131,10 +127,7 @@ function App() {
     <div className="relative">
 
       <Routes>
-
-        <Route path="/" element={
-          isAuthenticated ? <HomePage /> : <Navigate to="/landing" />
-        } />
+        <Route path="/" element={isAuthenticated ? <HomePage /> : <Navigate to="/landing" />} />
 
         <Route path="/landing" element={
           !isAuthenticated
@@ -169,11 +162,9 @@ function App() {
         <Route path="/booking" element={<PageLoader><BookingPage /></PageLoader>} />
         <Route path="/packages" element={<PageLoader><Packages /></PageLoader>} />
         <Route path="*" element={<Navigate to="/" />} />
-
       </Routes>
 
       {showContactModal && <ContactModal />}
-
     </div>
   );
 }

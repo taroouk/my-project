@@ -1,114 +1,118 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
-import { supabase, User } from '../lib/supabaseClient'
-
-// Type للمستخدم اللي جاي من Supabase
-type SupabaseUser = {
-  id: string
-  email?: string
-  phone?: string
-  app_metadata: any
-  user_metadata: any
-  created_at?: string
-  confirmed_at?: string | null
-  last_sign_in_at?: string | null
-  role?: string
-  updated_at?: string
-  email_confirmed_at?: string | null
-  deleted_at?: string | null
-}
+import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { supabase, UserInsert, User } from '../lib/supabaseClient';
 
 interface AuthContextType {
-  user: User | null
-  signUp: (email: string, password: string, full_name?: string, phone?: string) => Promise<{ error?: string }>
-  signIn: (email: string, password: string) => Promise<{ error?: string }>
-  signOut: () => Promise<void>
+  user: User | null;
+  signUp: (email: string, password: string, full_name?: string, phone?: string, company_name?: string) => Promise<{ error?: string }>;
+  signIn: (email: string, password: string) => Promise<{ error?: string }>;
+  signOut: () => Promise<void>;
+  loading: boolean;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined)
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null)
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      const sUser = data.session?.user
-      if (sUser) {
-        const formattedUser: User = {
+    const getSession = async () => {
+      const { data } = await supabase.auth.getSession();
+      if (data.session?.user) {
+        const sUser = data.session.user;
+        setUser({
           id: sUser.id,
-          email: sUser.email || '', // حطينا default فارغ
+          email: sUser.email || '',
           full_name: sUser.user_metadata?.full_name,
           phone: sUser.user_metadata?.phone,
+          company_name: sUser.user_metadata?.company_name,
           subscription_plan: 'basic',
           created_at: new Date().toISOString(),
-        }
-        setUser(formattedUser)
+        });
       }
-    })
+      setLoading(false);
+    };
+
+    getSession();
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
-        const sUser: SupabaseUser = session.user
-        const formattedUser: User = {
+        const sUser = session.user;
+        setUser({
           id: sUser.id,
-          email: sUser.email || '', // default
+          email: sUser.email || '',
           full_name: sUser.user_metadata?.full_name,
           phone: sUser.user_metadata?.phone,
+          company_name: sUser.user_metadata?.company_name,
           subscription_plan: 'basic',
           created_at: new Date().toISOString(),
-        }
-        setUser(formattedUser)
+        });
       } else {
-        setUser(null)
+        setUser(null);
       }
-    })
+    });
 
-    return () => {
-      listener.subscription.unsubscribe()
+    return () => listener.subscription.unsubscribe();
+  }, []);
+
+  const signUp = async (
+    email: string,
+    password: string,
+    full_name?: string,
+    phone?: string,
+    company_name?: string
+  ) => {
+    try {
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: { data: { full_name, phone, company_name } },
+      });
+
+      if (signUpError) return { error: signUpError.message };
+
+      const newUser: UserInsert = {
+        email,
+        full_name,
+        phone,
+        company_name,
+        subscription_plan: 'basic',
+      };
+
+const { error: insertError } = await supabase
+  .from('users')
+  .insert([newUser] as UserInsert[]);
+
+
+      if (insertError) return { error: insertError.message };
+
+      return {};
+    } catch (err: any) {
+      return { error: err.message };
     }
-  }, [])
-
-  const signUp = async (email: string, password: string, full_name?: string, phone?: string) => {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { full_name, phone } // هيتحط في user_metadata
-      }
-    })
-    if (error) return { error: error.message }
-
-    // إضافة البيانات لجدول users
-    await supabase.from('users').insert({
-      id: data.user?.id,
-      email: email || '',
-      full_name,
-      phone,
-      subscription_plan: 'basic',
-      created_at: new Date().toISOString(),
-    })
-
-    return {}
-  }
+  };
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
-    return { error: error?.message }
-  }
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    return { error: error?.message };
+  };
 
   const signOut = async () => {
-    await supabase.auth.signOut()
-    setUser(null)
-  }
+    await supabase.auth.signOut();
+    setUser(null);
+  };
 
   return (
-    <AuthContext.Provider value={{ user, signUp, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, signUp, signIn, signOut, loading }}>
       {children}
     </AuthContext.Provider>
-  )
-}
+  );
+};
 
 export const useAuth = () => {
-  const context = useContext(AuthContext)
-  if (!context) throw new Error('useAuth must be used within AuthProvider')
-  return context
-}
+  const context = useContext(AuthContext);
+  if (!context) throw new Error('useAuth must be used within AuthProvider');
+  return context;
+};
+
+export default AuthProvider;

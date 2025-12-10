@@ -29,7 +29,6 @@ export interface User {
   created_at: string
 }
 
-// نوع البيانات عند الإضافة (insert)
 export type UserInsert = Omit<User, 'id' | 'created_at'>
 
 export interface Employee {
@@ -52,7 +51,7 @@ export interface Website {
   custom_domain?: string
   template?: string
   status: 'active' | 'draft' | 'maintenance'
-  content?: any
+  content?: Record<string, any> // بدل any
   created_at: string
 }
 export type WebsiteInsert = Omit<Website, 'id' | 'created_at'>
@@ -80,6 +79,3 @@ export interface Customer {
   created_at: string
 }
 export type CustomerInsert = Omit<Customer, 'id' | 'created_at'>
-
-// ===== Example Usage =====
-// const { data, error } = await supabase.from<User, UserInsert>('users').insert([{ email: 'a@b.com', subscription_plan: 'basic' }])
