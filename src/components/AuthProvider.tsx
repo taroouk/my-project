@@ -3,8 +3,19 @@ import { supabase, UserInsert, User } from '../lib/supabaseClient';
 
 interface AuthContextType {
   user: User | null;
-  signUp: (email: string, password: string, full_name?: string, phone?: string, company_name?: string) => Promise<{ error?: string }>;
-  signIn: (email: string, password: string) => Promise<{ error?: string }>;
+  role: 'admin' | 'merchant' | 'customer' | null;
+  signUp: (
+    email: string,
+    password: string,
+    role: 'admin' | 'merchant' | 'customer',
+    full_name?: string,
+    phone?: string,
+    company_name?: string
+  ) => Promise<{ error?: string }>;
+  signIn: (
+    email: string,
+    password: string
+  ) => Promise<{ error?: string }>;
   signOut: () => Promise<void>;
   loading: boolean;
 }
@@ -13,6 +24,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [role, setRole] = useState<'admin' | 'merchant' | 'customer' | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -20,15 +32,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const { data } = await supabase.auth.getSession();
       if (data.session?.user) {
         const sUser = data.session.user;
-        setUser({
-          id: sUser.id,
-          email: sUser.email || '',
-          full_name: sUser.user_metadata?.full_name,
-          phone: sUser.user_metadata?.phone,
-          company_name: sUser.user_metadata?.company_name,
-          subscription_plan: 'basic',
-          created_at: new Date().toISOString(),
-        });
+        const userRole = (sUser.user_metadata?.role as 'admin' | 'merchant' | 'customer') || 'customer';
+        setRole(userRole);
       }
       setLoading(false);
     };
@@ -38,17 +43,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         const sUser = session.user;
-        setUser({
-          id: sUser.id,
-          email: sUser.email || '',
-          full_name: sUser.user_metadata?.full_name,
-          phone: sUser.user_metadata?.phone,
-          company_name: sUser.user_metadata?.company_name,
-          subscription_plan: 'basic',
-          created_at: new Date().toISOString(),
-        });
+        const userRole = (sUser.user_metadata?.role as 'admin' | 'merchant' | 'customer') || 'customer';
+        setRole(userRole);
       } else {
         setUser(null);
+        setRole(null);
       }
     });
 
@@ -58,6 +57,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const signUp = async (
     email: string,
     password: string,
+    userRole: 'admin' | 'merchant' | 'customer',
     full_name?: string,
     phone?: string,
     company_name?: string
@@ -66,7 +66,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const { data, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
-        options: { data: { full_name, phone, company_name } },
+        options: { data: { full_name, phone, company_name, role: userRole } },
       });
 
       if (signUpError) return { error: signUpError.message };
@@ -77,13 +77,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         phone,
         company_name,
         subscription_plan: 'basic',
+        role: userRole
       };
 
-const { error: insertError } = await supabase
-  .from('users')
-  .insert([newUser] as UserInsert[]);
-
-
+      const { error: insertError } = await supabase.from('users').insert([newUser] as UserInsert[]);
       if (insertError) return { error: insertError.message };
 
       return {};
@@ -93,17 +90,22 @@ const { error: insertError } = await supabase
   };
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error: error?.message };
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) return { error: error.message };
+
+    const userRole = (data.user?.user_metadata?.role as 'admin' | 'merchant' | 'customer') || 'customer';
+    setRole(userRole);
+    return {};
   };
 
   const signOut = async () => {
     await supabase.auth.signOut();
     setUser(null);
+    setRole(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, signUp, signIn, signOut, loading }}>
+    <AuthContext.Provider value={{ user, role, signUp, signIn, signOut, loading }}>
       {children}
     </AuthContext.Provider>
   );

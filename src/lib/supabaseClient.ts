@@ -27,9 +27,10 @@ export interface User {
   phone?: string
   subscription_plan: 'basic' | 'professional' | 'enterprise'
   created_at: string
+  role: 'admin' | 'merchant' | 'customer'
 }
 
-export type UserInsert = Omit<User, 'id' | 'created_at'>
+export type UserInsert = Omit<User, 'id' | 'created_at' | 'email' | 'phone' | 'company_name' | 'full_name' | 'subscription_plan' | 'role'> 
 
 export interface Employee {
   id: string
