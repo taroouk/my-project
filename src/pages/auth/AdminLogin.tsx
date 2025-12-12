@@ -11,7 +11,7 @@ const AdminLogin = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const { error } = await signIn(email, password, 'admin');
+    const { error } = await signIn(email, password);
     if (error) {
       setError(error);
     } else {

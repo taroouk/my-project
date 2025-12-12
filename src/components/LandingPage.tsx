@@ -6,9 +6,29 @@ import { useTheme } from '../contexts/ThemeContext';
 interface LandingPageProps {
   onGetStarted: () => void;
   onAdminLogin: () => void;
+  onMerchantLogin: () => void;
+  onCustomerLogin: () => void;
+  language: 'ar' | 'en'; 
+  setLanguage: (lang: 'ar' | 'en') => void;
 }
 
-const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onAdminLogin }) => {
+const translations = {
+    ar: {
+      getStarted: 'ابدأ الآن',
+      adminLogin: 'تسجيل دخول الادمن',
+      customerLogin: 'تسجيل دخول العميل',
+      welcome: 'مرحباً بك في سيرفلي',
+    },
+    en: {
+      getStarted: 'Get Started',
+      adminLogin: 'Admin Login',
+      customerLogin: 'Customer Login',
+      welcome: 'Welcome to Servly',
+    },
+  };
+
+const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onAdminLogin, onMerchantLogin, onCustomerLogin, language, setLanguage }) => {
+  const t = translations[language];
   const { isDarkMode, toggleDarkMode } = useTheme();
   const [showAboutModal, setShowAboutModal] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
@@ -67,18 +87,22 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onAdminLogin })
                 {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
               </button>
 
-              <button
-                onClick={() => setShowLoginModal(true)}
-                className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:text-purple-600 dark:hover:text-purple-400 transition-colors font-medium"
+              <select
+                value={language}
+                onChange={(e) => setLanguage(e.target.value as 'ar' | 'en')}
+                className="p-2 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
               >
-                تسجيل الدخول
-              </button>
-              <button
-                onClick={onGetStarted}
-                className="px-6 py-3 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-xl hover:from-purple-700 hover:to-purple-800 transition-colors font-medium"
-              >
-                ابدأ الآن
-              </button>
+                <option value="ar">AR</option>
+                <option value="en">EN</option>
+              </select>
+
+              <div className="hidden lg:flex items-center space-x-3">
+                <button
+                  onClick={() => setShowLoginModal(true)}
+                  className="p-2 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                  title="تسجيل الدخول"
+                > <span>تسجيل الدخول  </span>                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -652,15 +676,27 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onAdminLogin })
                   <button
                     onClick={() => {
                       setShowLoginModal(false);
-                      onGetStarted();
+                      onCustomerLogin();
                     }}
                     className="w-full p-4 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-xl hover:from-purple-700 hover:to-purple-800 transition-colors font-medium text-center"
                   >
                     <div className="flex items-center justify-center space-x-3">
-                      <Users className="w-6 h-6" />
                       <span>دخول كعميل</span>
                     </div>
                     <p className="text-sm text-purple-100 mt-2">الوصول إلى لوحة تحكم العميل</p>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setShowLoginModal(false);
+                      onMerchantLogin();
+                    }}
+                    className="w-full p-4 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl hover:from-green-700 hover:to-green-800 transition-colors font-medium text-center"
+                  >
+                    <div className="flex items-center justify-center space-x-3">
+                      <span>دخول كتاجر</span>
+                    </div>
+                    <p className="text-sm text-green-100 mt-2">الوصول إلى لوحة تحكم التاجر</p>
                   </button>
 
                   <button
@@ -671,11 +707,11 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onAdminLogin })
                     className="w-full p-4 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors font-medium text-center"
                   >
                     <div className="flex items-center justify-center space-x-3">
-                      <Shield className="w-6 h-6" />
                       <span>دخول كمدير</span>
                     </div>
                     <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">الوصول إلى لوحة تحكم الإدارة</p>
                   </button>
+
                 </div>
               </div>
             </div>

@@ -62,6 +62,7 @@ const AuthPages: React.FC<AuthPagesProps> = ({ onLogin, isAdmin = false }) => {
         const { error } = await signUp(
           formData.email,
           formData.password,
+          'customer',
           formData.name,
           formData.phone
         );

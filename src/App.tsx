@@ -10,6 +10,11 @@ import LandingPage from './components/LandingPage';
 import BookingPage from './pages/BookingPage';
 import Packages from './pages/Packages';
 
+// Role-based Logins
+import AdminLogin from './pages/auth/AdminLogin';
+import MerchantLogin from './pages/auth/MerchantLogin';
+import CustomerLogin from './pages/auth/CustomerLogin';
+
 // Components
 import HRDashboard from './components/HRDashboard';
 import LoyaltySystem from './components/LoyaltySystem';
@@ -26,22 +31,15 @@ function App() {
   const [showContactModal, setShowContactModal] = useState(false);
   const [isDemo, setIsDemo] = useState(false);
 
-  const { user, signOut } = useAuth();
+  const { user, role, signOut } = useAuth();
   const isAuthenticated = !!user || isDemo;
   const navigate = useNavigate();
   const { isDarkMode, toggleDarkMode } = useTheme();
 
-  const [userRole, setUserRole] = useState<'admin' | 'merchant' | 'customer' | null>(null);
-
   useEffect(() => {
     const demoStatus = localStorage.getItem('isDemo');
     if (demoStatus === 'true') setIsDemo(true);
-
-    // Set role based on user metadata if available
-    if (user) {
-      setUserRole((user as any).role || 'customer'); // assuming role stored in metadata
-    }
-  }, [user]);
+  }, []);
 
   const handleLogout = async () => {
     if (isDemo) {
@@ -50,7 +48,6 @@ function App() {
     } else {
       await signOut();
     }
-    setUserRole(null);
     navigate('/');
   };
 
@@ -90,7 +87,7 @@ function App() {
       </header>
       <main className="p-6">
         <h2 className="text-2xl font-bold">{t.welcome}</h2>
-        <p>Role: {userRole}</p>
+        <p>Role: {role}</p>
       </main>
     </div>
   );
@@ -98,15 +95,43 @@ function App() {
   return (
     <div className="relative">
       <Routes>
+        {/* Home */}
         <Route path="/" element={isAuthenticated ? <HomePage /> : <Navigate to="/landing" />} />
-        <Route path="/landing" element={!isAuthenticated ? <LandingPage onGetStarted={() => navigate('/auth')} onAdminLogin={() => navigate('/admin')} /> : <Navigate to="/" />} />
+
+        {/* Landing */}
+        <Route
+          path="/landing"
+          element={
+            !isAuthenticated ? (
+              <LandingPage
+                    onGetStarted={() => navigate('/signup')} // ← تم التعديل هنا
+                    onAdminLogin={() => navigate('/login/admin')}
+                    onMerchantLogin={() => navigate('/login/merchant')}
+                    onCustomerLogin={() => navigate('/login/customer')}
+                    language={language}
+                    setLanguage={setLanguage}
+                  />
+            ) : (
+              <Navigate to="/" />
+            )
+          }
+        />
+
+        {/* General Login Page */}
         <Route path="/auth" element={!isAuthenticated ? <Login /> : <Navigate to="/" />} />
+
+        {/* Role-based Logins */}
+        <Route path="/login/admin" element={!isAuthenticated ? <AdminLogin /> : <Navigate to="/" />} />
+        <Route path="/login/merchant" element={!isAuthenticated ? <MerchantLogin /> : <Navigate to="/" />} />
+        <Route path="/login/customer" element={!isAuthenticated ? <CustomerLogin /> : <Navigate to="/" />} />
+
+        {/* Signup */}
         <Route path="/signup" element={<Signup />} />
 
         {/* Role-based Dashboards */}
-        <Route path="/admin" element={userRole === 'admin' ? <AdminDashboard onClose={() => navigate('/')} /> : <Navigate to="/" />} />
-        <Route path="/merchant" element={userRole === 'merchant' ? <PageLoader><WebsiteBuilder /></PageLoader> : <Navigate to="/" />} />
-        <Route path="/customer" element={userRole === 'customer' ? <PageLoader><BookingPage /></PageLoader> : <Navigate to="/" />} />
+        <Route path="/admin" element={role === 'admin' ? <AdminDashboard onClose={handleLogout} /> : <Navigate to="/" />} />
+        <Route path="/merchant" element={role === 'merchant' ? <PageLoader><WebsiteBuilder /></PageLoader> : <Navigate to="/" />} />
+        <Route path="/customer" element={role === 'customer' ? <PageLoader><BookingPage /></PageLoader> : <Navigate to="/" />} />
 
         {/* Common Pages */}
         <Route path="/hr" element={<PageLoader><HRDashboard /></PageLoader>} />

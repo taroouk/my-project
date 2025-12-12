@@ -11,7 +11,7 @@ const CustomerLogin = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const { error } = await signIn(email, password, 'customer');
+    const { error } = await signIn(email, password);
     if (error) {
       setError(error);
     } else {
