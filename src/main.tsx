@@ -1,14 +1,16 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
-import { AuthProvider } from './components/AuthProvider';
-import { ThemeContextProvider } from './contexts/ThemeContext'; // Changed from ThemeProvider in example, keeping original name
+import { AuthProvider } from './contexts/AuthContext';
+import { ThemeContextProvider } from './contexts/ThemeContext';
 import { SiteSettingsProvider } from './contexts/SiteSettingsContext';
-import App from './App.tsx'; // Keeping original .tsx extension
+import App from './App';
 import './index.css';
 
-createRoot(document.getElementById('root')!).render( // Keeping original createRoot
-  <StrictMode> {/* Keeping original StrictMode */}
+const root = createRoot(document.getElementById('root')!);
+
+root.render(
+  <StrictMode>
     <ThemeContextProvider>
       <AuthProvider>
         <BrowserRouter>

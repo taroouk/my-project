@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useAuth } from '../components/AuthProvider';
+import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 
 const Login = () => {
@@ -18,7 +18,7 @@ const Login = () => {
       setMessage(error);
     } else {
       // بعد تسجيل الدخول، نوجّه حسب الدور
-      const storedRole = (await import('../components/AuthProvider')).useAuth().role;
+      const storedRole = (await import('../contexts/AuthContext')).useAuth().role;
       switch (storedRole) {
         case 'admin':
           navigate('/admin');

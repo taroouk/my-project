@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Sun, Moon } from 'lucide-react';
-import { useAuth } from './components/AuthProvider';
+import { useAuth } from './contexts/AuthContext';
 import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
 
 // Pages
@@ -11,7 +11,7 @@ import BookingPage from './pages/BookingPage';
 import Packages from './pages/Packages';
 
 // Role-based Logins
-import AdminLogin from './pages/auth/AdminLogin';
+import AdminLogin from './pages/admin/AdminLogin';
 import MerchantLogin from './pages/auth/MerchantLogin';
 import CustomerLogin from './pages/auth/CustomerLogin';
 
@@ -22,7 +22,7 @@ import WebsiteBuilder from './components/WebsiteBuilder';
 import ContactPage from './components/ContactPage';
 import FAQPage from './components/FAQPage';
 import PageLoader from './components/PageLoader';
-import AdminDashboard from './components/AdminDashboard';
+import AdminDashboard from './pages/admin/AdminDashboard';
 import SubscriptionPlans from './components/SubscriptionPlans';
 import { useTheme } from './contexts/ThemeContext';
 
@@ -104,13 +104,13 @@ function App() {
           element={
             !isAuthenticated ? (
               <LandingPage
-                    onGetStarted={() => navigate('/signup')} // ← تم التعديل هنا
-                    onAdminLogin={() => navigate('/login/admin')}
-                    onMerchantLogin={() => navigate('/login/merchant')}
-                    onCustomerLogin={() => navigate('/login/customer')}
-                    language={language}
-                    setLanguage={setLanguage}
-                  />
+                onMerchantLogin={() => navigate('/login/merchant')}
+                onCustomerLogin={() => navigate('/login/customer')}
+                onAdminLogin={() => navigate('/login/admin')}
+                onGetStarted={() => navigate('/signup')}
+                language={language}
+                setLanguage={setLanguage}
+              />
             ) : (
               <Navigate to="/" />
             )
@@ -129,7 +129,7 @@ function App() {
         <Route path="/signup" element={<Signup />} />
 
         {/* Role-based Dashboards */}
-        <Route path="/admin" element={role === 'admin' ? <AdminDashboard onClose={handleLogout} /> : <Navigate to="/" />} />
+        <Route path="/admin/*" element={role === 'admin' ? <AdminDashboard onClose={handleLogout} /> : <Navigate to="/" />} />
         <Route path="/merchant" element={role === 'merchant' ? <PageLoader><WebsiteBuilder /></PageLoader> : <Navigate to="/" />} />
         <Route path="/customer" element={role === 'customer' ? <PageLoader><BookingPage /></PageLoader> : <Navigate to="/" />} />
 

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Building2, Eye, EyeOff, Mail, Lock, User, Phone } from 'lucide-react';
-import { useAuth } from './AuthProvider';
+import { useAuth } from './../contexts/AuthContext';
 
 interface AuthPagesProps {
   onLogin: (isDemo?: boolean) => void;
@@ -21,6 +21,7 @@ const AuthPages: React.FC<AuthPagesProps> = ({ onLogin, isAdmin = false }) => {
     phone: '',
     company: ''
   });
+  
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setError(null);

@@ -1,33 +1,164 @@
 import React, { useState } from 'react';
-
-import { Star, Zap, Shield, Globe, Users, Building2, Sun, Moon, Play, ArrowRight, CheckCircle, Gift, Award, Phone, Mail, MapPin, Sparkles } from 'lucide-react';
 import { useTheme } from '../contexts/ThemeContext';
+import {
+  Star,
+  Zap,
+  Shield,
+  Globe,
+  Users,
+  Building2,
+  Sun,
+  Moon,
+  Play,
+  ArrowRight,
+  CheckCircle,
+  Gift,
+  Award,
+  Phone,
+  Mail,
+  MapPin,
+  Sparkles,
+} from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
+import { useSiteSettings } from '../contexts/SiteSettingsContext';
 
 interface LandingPageProps {
   onGetStarted: () => void;
-  onAdminLogin: () => void;
-  onMerchantLogin: () => void;
   onCustomerLogin: () => void;
-  language: 'ar' | 'en'; 
+  onMerchantLogin: () => void;
+  language: 'ar' | 'en';
   setLanguage: (lang: 'ar' | 'en') => void;
 }
 
 const translations = {
-    ar: {
-      getStarted: 'ابدأ الآن',
-      adminLogin: 'تسجيل دخول الادمن',
-      customerLogin: 'تسجيل دخول العميل',
-      welcome: 'مرحباً بك في سيرفلي',
-    },
-    en: {
-      getStarted: 'Get Started',
-      adminLogin: 'Admin Login',
-      customerLogin: 'Customer Login',
-      welcome: 'Welcome to Servly',
-    },
-  };
+  ar: {
+    getStarted: 'ابدأ الآن',
+    login: 'تسجيل الدخول',
+    about: 'من نحن',
+    pricing: 'الأسعار',
+    booking: 'احجز موعد',
+    contact: 'اتصل بنا',
+    heroSubtitle: 'منصة الأعمال الذكية',
+    heroTitleMain: 'منصة الأعمال المتكاملة',
+    heroTitleHighlight: 'لإدارة شركتك بذكاء',
+    heroDescription: 'اجمع بين إدارة الموارد البشرية ونظام نقاط الولاء وبناء المواقع الإلكترونية في منصة واحدة متطورة',
+    heroDemo: 'شاهد العرض التوضيحي',
+    heroCTA: 'ابدأ تجربتك المجانية',
+    statsCompanies: 'شركة تثق بنا',
+    statsUptime: 'وقت التشغيل',
+    statsEmployees: 'موظف يستخدم المنصة',
+    statsRating: 'تقييم العملاء',
+    featuresTitle: 'كل ما تحتاجه لإدارة أعمالك',
+    featuresSubtitle: 'حلول متكاملة تجمع بين القوة والبساطة',
+    hrTitle: 'إدارة الموارد البشرية',
+    hrDesc: 'نظام شامل لإدارة الموظفين والحضور والانصراف والرواتب مع تقارير تفصيلية',
+    hrList1: 'تتبع الحضور والانصراف',
+    hrList2: 'إدارة الرواتب والمكافآت',
+    hrList3: 'جدولة المواعيد والمهام',
+    loyaltyTitle: 'نظام نقاط الولاء',
+    loyaltyDesc: 'نظام متطور للمكافآت ونقاط الولاء مع دعم Apple Wallet للعروض الذكية',
+    loyaltyList1: 'نقاط ولاء قابلة للتخصيص',
+    loyaltyList2: 'تكامل مع Apple Wallet',
+    loyaltyList3: 'عروض وخصومات ذكية',
+    websiteTitle: 'منشئ المواقع',
+    websiteDesc: 'أنشئ موقعك الإلكتروني بسهولة مع قوالب احترافية وربط الدومين المخصص',
+    websiteList1: 'قوالب احترافية متنوعة',
+    websiteList2: 'ربط الدومين المخصص',
+    websiteList3: 'محرر مرئي سهل الاستخدام',
+    pricingTitle: 'خطط تناسب جميع الأعمال',
+    pricingSubtitle: 'اختر الخطة المناسبة لحجم شركتك',
+    basicPlan: 'الخطة الأساسية',
+    professionalPlan: 'الخطة الاحترافية',
+    enterprisePlan: 'الخطة المؤسسية',
+    popularBadge: 'الأكثر شعبية',
+    ctaTitle: 'جاهز لتطوير أعمالك؟',
+    ctaDesc: 'ابدأ تجربتك المجانية لمدة 14 يوم واكتشف قوة Servly',
+    ctaCTA: 'ابدأ تجربتك المجانية',
+    footerProduct: 'المنتج',
+    footerCompany: 'الشركة',
+    footerSupport: 'الدعم',
+    footerRights: 'جميع الحقوق محفوظة.',
+    aboutStoryTitle: 'قصة Servly',
+    aboutStoryDesc: 'تأسست Servly في عام 2020 بهدف تبسيط إدارة الأعمال للشركات الناشئة والمتوسطة في المنطقة العربية. بدأنا برؤية واضحة: دمج جميع احتياجات الأعمال في منصة واحدة قوية وسهلة الاستخدام.',
+    aboutMissionTitle: 'مهمتنا',
+    aboutMissionDesc: 'نسعى لتمكين الشركات من التركيز على نموها الأساسي من خلال توفير حلول تقنية متطورة تدير الموارد البشرية، وأنظمة الولاء، وبناء المواقع الإلكترونية بكفاءة عالية.',
+    aboutValuesTitle: 'قيمنا الأساسية',
+    aboutTeamTitle: 'فريق العمل',
+    aboutContactTitle: 'تواصل معنا',
+    phone: 'الهاتف',
+    email: 'البريد الإلكتروني',
+    address: 'العنوان',
+    loginTitle: 'تسجيل الدخول',
+  },
+  en: {
+    getStarted: 'Get Started',
+    login: 'Login',
+    about: 'About',
+    pricing: 'Pricing',
+    booking: 'Book Appointment',
+    contact: 'Contact',
+    heroSubtitle: 'Smart Business Platform',
+    heroTitleMain: 'All-in-One Business Platform',
+    heroTitleHighlight: 'Manage Your Company Smartly',
+    heroDescription: 'Combine HR management, loyalty points, and website builder in a single advanced platform',
+    heroDemo: 'Watch Demo',
+    heroCTA: 'Start Free Trial',
+    statsCompanies: 'Trusted Companies',
+    statsUptime: 'Uptime',
+    statsEmployees: 'Employees Using Platform',
+    statsRating: 'Customer Rating',
+    featuresTitle: 'Everything You Need to Manage Your Business',
+    featuresSubtitle: 'Integrated solutions combining power and simplicity',
+    hrTitle: 'HR Management',
+    hrDesc: 'A comprehensive system for managing employees, attendance, payroll with detailed reports',
+    hrList1: 'Attendance Tracking',
+    hrList2: 'Payroll & Bonuses Management',
+    hrList3: 'Schedule Tasks & Appointments',
+    loyaltyTitle: 'Loyalty Points System',
+    loyaltyDesc: 'Advanced rewards system with Apple Wallet support for smart offers',
+    loyaltyList1: 'Customizable loyalty points',
+    loyaltyList2: 'Integration with Apple Wallet',
+    loyaltyList3: 'Smart deals & discounts',
+    websiteTitle: 'Website Builder',
+    websiteDesc: 'Create your website easily with professional templates and custom domain linking',
+    websiteList1: 'Professional templates',
+    websiteList2: 'Custom domain linking',
+    websiteList3: 'Easy visual editor',
+    pricingTitle: 'Plans for Every Business',
+    pricingSubtitle: 'Choose the plan that fits your company size',
+    basicPlan: 'Basic Plan',
+    professionalPlan: 'Professional Plan',
+    enterprisePlan: 'Enterprise Plan',
+    popularBadge: 'Most Popular',
+    ctaTitle: 'Ready to Grow Your Business?',
+    ctaDesc: 'Start your 14-day free trial and discover Servly’s power',
+    ctaCTA: 'Start Free Trial',
+    footerProduct: 'Product',
+    footerCompany: 'Company',
+    footerSupport: 'Support',
+    footerRights: 'All rights reserved.',
+    aboutStoryTitle: 'Servly Story',
+    aboutStoryDesc: 'Founded in 2020, Servly simplifies business management for startups and SMEs. Our vision: integrate all business needs into one powerful and easy-to-use platform.',
+    aboutMissionTitle: 'Our Mission',
+    aboutMissionDesc: 'We empower companies to focus on core growth by providing advanced solutions for HR, loyalty systems, and website building efficiently.',
+    aboutValuesTitle: 'Core Values',
+    aboutTeamTitle: 'Team',
+    aboutContactTitle: 'Contact Us',
+    phone: 'Phone',
+    email: 'Email',
+    address: 'Address',
+    loginTitle: 'Login',
+  },
+};
 
-const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onAdminLogin, onMerchantLogin, onCustomerLogin, language, setLanguage }) => {
+
+const LandingPage: React.FC<LandingPageProps> = ({
+  onGetStarted,
+  onMerchantLogin,
+  onCustomerLogin,
+  language,
+  setLanguage,
+}) => {
   const t = translations[language];
   const { isDarkMode, toggleDarkMode } = useTheme();
   const [showAboutModal, setShowAboutModal] = useState(false);
@@ -56,25 +187,25 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onAdminLogin, o
                 onClick={() => setShowAboutModal(true)}
                 className="text-gray-700 dark:text-gray-300 hover:text-purple-600 dark:hover:text-purple-400 transition-colors font-medium"
               >
-                من نحن
+                {t.about}
               </button>
               <a
                 href="/subscriptions"
                 className="text-gray-700 dark:text-gray-300 hover:text-purple-600 dark:hover:text-purple-400 transition-colors font-medium"
               >
-                الأسعار
+                {t.pricing}
               </a>
               <a
                 href="/booking"
                 className="text-gray-700 dark:text-gray-300 hover:text-purple-600 dark:hover:text-purple-400 transition-colors font-medium"
               >
-                احجز موعد
+                {t.booking}
               </a>
               <a
                 href="/contact"
                 className="text-gray-700 dark:text-gray-300 hover:text-purple-600 dark:hover:text-purple-400 transition-colors font-medium"
               >
-                اتصل بنا
+                {t.contact}ا
               </a>
             </nav>
 
@@ -101,7 +232,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onAdminLogin, o
                   onClick={() => setShowLoginModal(true)}
                   className="p-2 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
                   title="تسجيل الدخول"
-                > <span>تسجيل الدخول  </span>                </button>
+                > <span>{t.login}  </span>                </button>
               </div>
             </div>
           </div>
@@ -525,12 +656,6 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onAdminLogin, o
           </div>
           <div className="border-t border-gray-800 dark:border-gray-700 pt-8 flex items-center justify-between">
             <p className="text-gray-400 dark:text-gray-500">&copy; 2024 Servly. جميع الحقوق محفوظة.</p>
-            <button
-              onClick={onAdminLogin}
-              className="py-3 px-6 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors font-medium"
-            >
-              لوحة تحكم الإدارة
-            </button>
           </div>
         </div>
       </footer>
@@ -673,18 +798,6 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onAdminLogin, o
                 </div>
 
                 <div className="space-y-4">
-                  <button
-                    onClick={() => {
-                      setShowLoginModal(false);
-                      onCustomerLogin();
-                    }}
-                    className="w-full p-4 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-xl hover:from-purple-700 hover:to-purple-800 transition-colors font-medium text-center"
-                  >
-                    <div className="flex items-center justify-center space-x-3">
-                      <span>دخول كعميل</span>
-                    </div>
-                    <p className="text-sm text-purple-100 mt-2">الوصول إلى لوحة تحكم العميل</p>
-                  </button>
 
                   <button
                     onClick={() => {
@@ -702,14 +815,14 @@ const LandingPage: React.FC<LandingPageProps> = ({ onGetStarted, onAdminLogin, o
                   <button
                     onClick={() => {
                       setShowLoginModal(false);
-                      onAdminLogin();
+                      onCustomerLogin();
                     }}
                     className="w-full p-4 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors font-medium text-center"
                   >
                     <div className="flex items-center justify-center space-x-3">
-                      <span>دخول كمدير</span>
+                      <span>دخول كاعميل</span>
                     </div>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">الوصول إلى لوحة تحكم الإدارة</p>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">الوصول إلى لوحة تحكم العميل</p>
                   </button>
 
                 </div>

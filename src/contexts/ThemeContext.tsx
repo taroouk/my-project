@@ -1,37 +1,52 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+// src/contexts/ThemeContext.tsx
+import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 
 interface ThemeContextType {
   isDarkMode: boolean;
   toggleDarkMode: () => void;
+  setDarkMode: (value: boolean) => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
-export const ThemeContextProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+export const ThemeContextProvider = ({ children }: { children: ReactNode }) => {
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
-    const savedTheme = localStorage.getItem('theme');
-    return savedTheme === 'dark';
+    // قراءة القيمة المحفوظة
+    return localStorage.getItem('theme') === 'dark';
   });
 
+  // مزامنة الـ dark mode مع <html>
   useEffect(() => {
+    const root = document.documentElement;
+
     if (isDarkMode) {
-      document.documentElement.classList.add('dark');
+      root.classList.add('dark');
       localStorage.setItem('theme', 'dark');
     } else {
-      document.documentElement.classList.remove('dark');
+      root.classList.remove('dark');
       localStorage.setItem('theme', 'light');
     }
   }, [isDarkMode]);
 
-  const toggleDarkMode = () => setIsDarkMode(prevMode => !prevMode);
+  const toggleDarkMode = () => {
+    setIsDarkMode(prev => !prev);
+  };
 
-  return <ThemeContext.Provider value={{ isDarkMode, toggleDarkMode }}>{children}</ThemeContext.Provider>;
+  const setDarkMode = (value: boolean) => {
+    setIsDarkMode(value);
+  };
+
+  return (
+    <ThemeContext.Provider value={{ isDarkMode, toggleDarkMode, setDarkMode }}>
+      {children}
+    </ThemeContext.Provider>
+  );
 };
 
-export const useTheme = (): ThemeContextType => {
+export const useTheme = () => {
   const context = useContext(ThemeContext);
-  if (context === undefined) {
-    throw new Error('useTheme must be used within a ThemeContextProvider');
+  if (!context) {
+    throw new Error('useTheme must be used inside ThemeContextProvider');
   }
   return context;
 };
