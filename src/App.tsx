@@ -18,6 +18,8 @@ import CustomerLogin from './pages/auth/CustomerLogin';
 
 // Dashboards
 import AdminDashboard from './pages/admin/AdminDashboard';
+import CustomerDashboard from "./pages/dashboard/customer/CustomerDashboard";
+import MerchantDashboard from "./pages/dashboard/merchant/MerchantDashboard";
 
 // Components
 import HRDashboard from './components/HRDashboard';
@@ -114,20 +116,12 @@ function App() {
           <RequireAdmin>
             <AdminDashboard onClose={handleLogout} />
           </RequireAdmin>
-        }
+        } 
       />
 
-      {/* ================= MERCHANT ================= */}
-      <Route
-        path="/merchant"
-        element={role === 'merchant' ? <PageLoader><WebsiteBuilder /></PageLoader> : <Navigate to="/" />}
-      />
-
-      {/* ================= CUSTOMER ================= */}
-      <Route
-        path="/customer"
-        element={role === 'customer' ? <PageLoader><BookingPage /></PageLoader> : <Navigate to="/" />}
-      />
+      {/* ================= DASHBOARDS ================= */}  
+      <Route path="/dashboard/customer" element={<CustomerDashboard />} />
+      <Route path="/dashboard/merchant" element={<MerchantDashboard />} />
 
       {/* ================= COMMON ================= */}
       <Route path="/hr" element={<PageLoader><HRDashboard /></PageLoader>} />
