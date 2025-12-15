@@ -12,7 +12,7 @@ const AdminLogin = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const res = await signIn(email, password);
+    const res = await signIn(email, password, { adminOnly: true });
     if (res.error) return setError(res.error);
 
     // Check if user is admin
@@ -20,6 +20,8 @@ const AdminLogin = () => {
     if (dbUser?.role === 'admin') navigate('/admin');
     else setError('Not authorized as Admin');
   };
+  
+
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">

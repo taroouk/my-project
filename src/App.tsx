@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Sun, Moon } from 'lucide-react';
 import { useAuth } from './contexts/AuthContext';
 import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
+import { useTheme } from './contexts/ThemeContext';
 
 // Pages
 import Login from './pages/Login';
@@ -10,10 +11,13 @@ import LandingPage from './components/LandingPage';
 import BookingPage from './pages/BookingPage';
 import Packages from './pages/Packages';
 
-// Role-based Logins
+// Auth
 import AdminLogin from './pages/admin/AdminLogin';
 import MerchantLogin from './pages/auth/MerchantLogin';
 import CustomerLogin from './pages/auth/CustomerLogin';
+
+// Dashboards
+import AdminDashboard from './pages/admin/AdminDashboard';
 
 // Components
 import HRDashboard from './components/HRDashboard';
@@ -22,9 +26,10 @@ import WebsiteBuilder from './components/WebsiteBuilder';
 import ContactPage from './components/ContactPage';
 import FAQPage from './components/FAQPage';
 import PageLoader from './components/PageLoader';
-import AdminDashboard from './pages/admin/AdminDashboard';
 import SubscriptionPlans from './components/SubscriptionPlans';
-import { useTheme } from './contexts/ThemeContext';
+
+// Guards
+import RequireAdmin from './routes/RequireAdmin';
 
 function App() {
   const [language, setLanguage] = useState<'ar' | 'en'>('ar');
@@ -32,9 +37,10 @@ function App() {
   const [isDemo, setIsDemo] = useState(false);
 
   const { user, role, signOut } = useAuth();
-  const isAuthenticated = !!user || isDemo;
   const navigate = useNavigate();
   const { isDarkMode, toggleDarkMode } = useTheme();
+
+  const isAuthenticated = !!user || isDemo;
 
   useEffect(() => {
     const demoStatus = localStorage.getItem('isDemo');
@@ -51,103 +57,90 @@ function App() {
     navigate('/');
   };
 
-  const translations = {
-    ar: { welcome: 'مرحباً بك', contactUs: 'تواصل معنا', phone: 'الهاتف', email: 'البريد الإلكتروني', address: 'العنوان' },
-    en: { welcome: 'Welcome', contactUs: 'Contact Us', phone: 'Phone', email: 'Email', address: 'Address' }
-  };
-  const t = translations[language];
-
-  const ContactModal = () => (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
-      <div className="fixed inset-0 bg-black/50" onClick={() => setShowContactModal(false)} />
-      <div className="flex min-h-full items-center justify-center p-4">
-        <div className="bg-white rounded-2xl p-8 max-w-md w-full">
-          <h3 className="text-xl font-bold mb-4">{t.contactUs}</h3>
-          <p>{t.phone}: +20 100 123 4567</p>
-          <p>{t.email}: info@servly.com</p>
-          <p>{t.address}: Cairo, Egypt</p>
-          <button onClick={() => setShowContactModal(false)} className="mt-4 w-full bg-purple-600 text-white rounded py-2">Close</button>
-        </div>
-      </div>
-    </div>
-  );
-
   const HomePage = () => (
-    <div className={`min-h-screen bg-gradient-to-br from-purple-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-950 dark:to-gray-900 text-gray-900 dark:text-gray-100 ${language === 'ar' ? 'rtl' : 'ltr'}`}>
-      <header className="p-4 flex justify-between items-center bg-white shadow">
-        <h1 className="font-bold">Servly</h1>
+    <div className={`min-h-screen ${language === 'ar' ? 'rtl' : 'ltr'}`}>
+      <header className="p-4 flex justify-between bg-white shadow">
+        <h1>Servly</h1>
         <div className="flex gap-3">
-          <button onClick={toggleDarkMode}>{isDarkMode ? <Sun /> : <Moon />}</button>
-          <select value={language} onChange={(e) => setLanguage(e.target.value as 'ar' | 'en')}>
-            <option value="ar">AR</option>
-            <option value="en">EN</option>
-          </select>
-          <button onClick={handleLogout} className="text-red-600">Logout</button>
+          <button onClick={toggleDarkMode}>
+            {isDarkMode ? <Sun /> : <Moon />}
+          </button>
+          <button onClick={handleLogout} className="text-red-600">
+            Logout
+          </button>
         </div>
       </header>
       <main className="p-6">
-        <h2 className="text-2xl font-bold">{t.welcome}</h2>
+        <h2>Welcome</h2>
         <p>Role: {role}</p>
       </main>
     </div>
   );
 
   return (
-    <div className="relative">
-      <Routes>
-        {/* Home */}
-        <Route path="/" element={isAuthenticated ? <HomePage /> : <Navigate to="/landing" />} />
+    <Routes>
 
-        {/* Landing */}
-        <Route
-          path="/landing"
-          element={
-            !isAuthenticated ? (
-              <LandingPage
-                onMerchantLogin={() => navigate('/login/merchant')}
-                onCustomerLogin={() => navigate('/login/customer')}
-                onAdminLogin={() => navigate('/login/admin')}
-                onGetStarted={() => navigate('/signup')}
-                language={language}
-                setLanguage={setLanguage}
-              />
-            ) : (
-              <Navigate to="/" />
-            )
-          }
-        />
+      {/* ================= PUBLIC WEBSITE ================= */}
+      <Route path="/" element={isAuthenticated ? <HomePage /> : <Navigate to="/landing" />} />
 
-        {/* General Login Page */}
-        <Route path="/auth" element={!isAuthenticated ? <Login /> : <Navigate to="/" />} />
+      <Route
+        path="/landing"
+        element={
+          !isAuthenticated ? (
+            <LandingPage
+              onMerchantLogin={() => navigate('/login/merchant')}
+              onCustomerLogin={() => navigate('/login/customer')}
+              onGetStarted={() => navigate('/signup')}
+              language={language}
+              setLanguage={setLanguage}
+            />
+          ) : (
+            <Navigate to="/" />
+          )
+        }
+      />
 
-        {/* Role-based Logins */}
-        <Route path="/login/admin" element={!isAuthenticated ? <AdminLogin /> : <Navigate to="/" />} />
-        <Route path="/login/merchant" element={!isAuthenticated ? <MerchantLogin /> : <Navigate to="/" />} />
-        <Route path="/login/customer" element={!isAuthenticated ? <CustomerLogin /> : <Navigate to="/" />} />
+      <Route path="/signup" element={<Signup />} />
 
-        {/* Signup */}
-        <Route path="/signup" element={<Signup />} />
+      {/* ================= AUTH ================= */}
+      <Route path="/login/admin" element={<AdminLogin />} />
+      <Route path="/login/merchant" element={<MerchantLogin />} />
+      <Route path="/login/customer" element={<CustomerLogin />} />
 
-        {/* Role-based Dashboards */}
-        <Route path="/admin/*" element={role === 'admin' ? <AdminDashboard onClose={handleLogout} /> : <Navigate to="/" />} />
-        <Route path="/merchant" element={role === 'merchant' ? <PageLoader><WebsiteBuilder /></PageLoader> : <Navigate to="/" />} />
-        <Route path="/customer" element={role === 'customer' ? <PageLoader><BookingPage /></PageLoader> : <Navigate to="/" />} />
+      {/* ================= ADMIN (HIDDEN & PROTECTED) ================= */}
+      <Route
+        path="/admin/*"
+        element={
+          <RequireAdmin>
+            <AdminDashboard onClose={handleLogout} />
+          </RequireAdmin>
+        }
+      />
 
-        {/* Common Pages */}
-        <Route path="/hr" element={<PageLoader><HRDashboard /></PageLoader>} />
-        <Route path="/loyalty" element={<PageLoader><LoyaltySystem /></PageLoader>} />
-        <Route path="/website" element={<PageLoader><WebsiteBuilder /></PageLoader>} />
-        <Route path="/contact" element={<PageLoader><ContactPage /></PageLoader>} />
-        <Route path="/faq" element={<PageLoader><FAQPage /></PageLoader>} />
-        <Route path="/subscriptions" element={<PageLoader><SubscriptionPlans /></PageLoader>} />
-        <Route path="/booking" element={<PageLoader><BookingPage /></PageLoader>} />
-        <Route path="/packages" element={<PageLoader><Packages /></PageLoader>} />
+      {/* ================= MERCHANT ================= */}
+      <Route
+        path="/merchant"
+        element={role === 'merchant' ? <PageLoader><WebsiteBuilder /></PageLoader> : <Navigate to="/" />}
+      />
 
-        <Route path="*" element={<Navigate to="/" />} />
-      </Routes>
+      {/* ================= CUSTOMER ================= */}
+      <Route
+        path="/customer"
+        element={role === 'customer' ? <PageLoader><BookingPage /></PageLoader> : <Navigate to="/" />}
+      />
 
-      {showContactModal && <ContactModal />}
-    </div>
+      {/* ================= COMMON ================= */}
+      <Route path="/hr" element={<PageLoader><HRDashboard /></PageLoader>} />
+      <Route path="/loyalty" element={<PageLoader><LoyaltySystem /></PageLoader>} />
+      <Route path="/website" element={<PageLoader><WebsiteBuilder /></PageLoader>} />
+      <Route path="/contact" element={<PageLoader><ContactPage /></PageLoader>} />
+      <Route path="/faq" element={<PageLoader><FAQPage /></PageLoader>} />
+      <Route path="/subscriptions" element={<PageLoader><SubscriptionPlans /></PageLoader>} />
+      <Route path="/booking" element={<PageLoader><BookingPage /></PageLoader>} />
+      <Route path="/packages" element={<PageLoader><Packages /></PageLoader>} />
+
+      <Route path="*" element={<Navigate to="/" />} />
+    </Routes>
   );
 }
 
