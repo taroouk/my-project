@@ -26,27 +26,22 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
             <Users className="w-5 h-5 text-purple-600" />
             <span>Users Management</span>
           </button>
-
           <button className="flex items-center space-x-2 w-full p-3 rounded-lg hover:bg-purple-100 dark:hover:bg-gray-700 transition-colors">
             <Star className="w-5 h-5 text-yellow-500" />
             <span>Ratings</span>
           </button>
-
           <button className="flex items-center space-x-2 w-full p-3 rounded-lg hover:bg-purple-100 dark:hover:bg-gray-700 transition-colors">
             <Zap className="w-5 h-5 text-purple-600" />
             <span>Plans</span>
           </button>
-
           <button className="flex items-center space-x-2 w-full p-3 rounded-lg hover:bg-purple-100 dark:hover:bg-gray-700 transition-colors">
             <Award className="w-5 h-5 text-yellow-500" />
             <span>Enterprise</span>
           </button>
-
           <button className="flex items-center space-x-2 w-full p-3 rounded-lg hover:bg-purple-100 dark:hover:bg-gray-700 transition-colors">
             <Gift className="w-5 h-5 text-purple-600" />
             <span>Loyalty</span>
           </button>
-
           <button className="flex items-center space-x-2 w-full p-3 rounded-lg hover:bg-purple-100 dark:hover:bg-gray-700 transition-colors">
             <Globe className="w-5 h-5 text-green-600" />
             <span>Website Builder</span>
@@ -105,7 +100,7 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
           </div>
         </div>
 
-        {/* Placeholder for more content */}
+        {/* Placeholder Sections */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="p-6 bg-white/60 dark:bg-gray-800/60 rounded-3xl shadow-lg backdrop-blur-xl h-64 flex items-center justify-center text-gray-500 dark:text-gray-400">
             Users Table Placeholder
@@ -114,6 +109,16 @@ const AdminDashboard: React.FC<AdminDashboardProps> = ({ onClose }) => {
             Plans Overview Placeholder
           </div>
         </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+          <div className="p-6 bg-white/60 dark:bg-gray-800/60 rounded-3xl shadow-lg backdrop-blur-xl h-64 flex items-center justify-center text-gray-500 dark:text-gray-400">
+            Enterprise Details Placeholder
+          </div>
+          <div className="p-6 bg-white/60 dark:bg-gray-800/60 rounded-3xl shadow-lg backdrop-blur-xl h-64 flex items-center justify-center text-gray-500 dark:text-gray-400">
+            Loyalty Program Placeholder
+          </div>
+        </div>
+
       </main>
     </div>
   );

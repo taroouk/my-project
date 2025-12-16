@@ -1,86 +1,113 @@
-import DashboardLayout from "../../dashboard/layouts/Dashboardlayout";
-import {
-  Store,
-  Users,
-  Gift,
-  Globe,
-  PlusCircle,
-} from "lucide-react";
+// src/pages/dashboard/merchant/MerchantDashboard.tsx
+import React from 'react';
+import { Box, Users, Star, Zap, Gift, LogOut } from 'lucide-react';
 
-const MerchantDashboard = () => {
+interface MerchantDashboardProps {
+  onClose?: () => void | Promise<void>;
+}
+
+const MerchantDashboard: React.FC<MerchantDashboardProps> = ({ onClose }) => {
   return (
-    <DashboardLayout title="Merchant Dashboard" role="merchant">
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
-        <StatCard title="Employees" value="—" icon={<Users />} />
-        <StatCard title="Loyalty Offers" value="—" icon={<Gift />} />
-        <StatCard title="Websites" value="—" icon={<Globe />} />
-        <StatCard title="Branches" value="—" icon={<Store />} />
-      </div>
-
-      {/* Actions */}
-      <section className="bg-white dark:bg-gray-900 rounded-2xl p-6 shadow-sm mb-10">
-        <h2 className="text-xl font-semibold mb-4 text-gray-900 dark:text-white">
-          Quick Actions
-        </h2>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <ActionCard title="Add Employee" />
-          <ActionCard title="Create Loyalty Offer" />
-          <ActionCard title="Build Website" />
+    <div className="flex h-screen bg-gradient-to-br from-purple-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-950 dark:to-gray-900 text-gray-900 dark:text-gray-100">
+      
+      {/* Sidebar */}
+      <aside className="w-64 bg-white/80 dark:bg-gray-800/80 backdrop-blur-xl border-r border-purple-100 dark:border-gray-700 flex flex-col">
+        <div className="p-6 flex items-center space-x-3">
+          <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-purple-800 rounded-2xl flex items-center justify-center">
+            <Box className="w-6 h-6 text-white" />
+          </div>
+          <h1 className="text-2xl font-bold bg-gradient-to-r from-purple-600 to-purple-800 bg-clip-text text-transparent">
+            Merchant
+          </h1>
         </div>
-      </section>
 
-      {/* Empty State */}
-      <section className="bg-gradient-to-br from-purple-50 to-white dark:from-gray-800 dark:to-gray-900 rounded-2xl p-10 text-center border border-purple-100 dark:border-gray-700">
-        <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-          Your business is not set up yet
-        </h3>
-        <p className="text-gray-600 dark:text-gray-400 mb-6 max-w-xl mx-auto">
-          Start by adding your company details, employees, and first loyalty
-          campaign. Everything will appear here once you begin.
-        </p>
+        <nav className="flex-1 px-4 mt-6 space-y-2">
+          <button className="flex items-center space-x-2 w-full p-3 rounded-lg hover:bg-purple-100 dark:hover:bg-gray-700 transition-colors">
+            <Users className="w-5 h-5 text-purple-600" />
+            <span>Customers</span>
+          </button>
 
-        <button className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-xl hover:from-purple-700 hover:to-purple-800 transition">
-          <PlusCircle size={20} />
-          Start Setup
-        </button>
-      </section>
-    </DashboardLayout>
+          <button className="flex items-center space-x-2 w-full p-3 rounded-lg hover:bg-purple-100 dark:hover:bg-gray-700 transition-colors">
+            <Star className="w-5 h-5 text-yellow-500" />
+            <span>Ratings</span>
+          </button>
+
+          <button className="flex items-center space-x-2 w-full p-3 rounded-lg hover:bg-purple-100 dark:hover:bg-gray-700 transition-colors">
+            <Zap className="w-5 h-5 text-purple-600" />
+            <span>Plans</span>
+          </button>
+
+          <button className="flex items-center space-x-2 w-full p-3 rounded-lg hover:bg-purple-100 dark:hover:bg-gray-700 transition-colors">
+            <Gift className="w-5 h-5 text-purple-600" />
+            <span>Loyalty</span>
+          </button>
+        </nav>
+
+        {onClose && (
+          <button
+            onClick={onClose}
+            className="flex items-center space-x-2 w-full p-3 m-4 rounded-lg hover:bg-red-100 dark:hover:bg-red-700 transition-colors text-red-600 dark:text-red-400"
+          >
+            <LogOut className="w-5 h-5" />
+            <span>Logout</span>
+          </button>
+        )}
+      </aside>
+
+      {/* Main Content */}
+      <main className="flex-1 p-8 overflow-y-auto">
+        <div className="flex justify-between items-center mb-8">
+          <h2 className="text-3xl font-bold">Merchant Dashboard</h2>
+          <span className="text-gray-600 dark:text-gray-400">Welcome, Merchant</span>
+        </div>
+
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6 mb-8">
+          <div className="p-6 bg-white/60 dark:bg-gray-800/60 rounded-3xl shadow-lg backdrop-blur-xl">
+            <div className="flex items-center space-x-2 mb-4">
+              <Users className="w-6 h-6 text-purple-600" />
+              <span className="font-semibold text-gray-900 dark:text-white">Total Customers</span>
+            </div>
+            <div className="text-2xl font-bold">0</div>
+          </div>
+
+          <div className="p-6 bg-white/60 dark:bg-gray-800/60 rounded-3xl shadow-lg backdrop-blur-xl">
+            <div className="flex items-center space-x-2 mb-4">
+              <Star className="w-6 h-6 text-yellow-500" />
+              <span className="font-semibold text-gray-900 dark:text-white">Ratings</span>
+            </div>
+            <div className="text-2xl font-bold">0/5</div>
+          </div>
+
+          <div className="p-6 bg-white/60 dark:bg-gray-800/60 rounded-3xl shadow-lg backdrop-blur-xl">
+            <div className="flex items-center space-x-2 mb-4">
+              <Zap className="w-6 h-6 text-purple-600" />
+              <span className="font-semibold text-gray-900 dark:text-white">Plans</span>
+            </div>
+            <div className="text-2xl font-bold">0</div>
+          </div>
+
+          <div className="p-6 bg-white/60 dark:bg-gray-800/60 rounded-3xl shadow-lg backdrop-blur-xl">
+            <div className="flex items-center space-x-2 mb-4">
+              <Gift className="w-6 h-6 text-purple-600" />
+              <span className="font-semibold text-gray-900 dark:text-white">Loyalty</span>
+            </div>
+            <div className="text-2xl font-bold">0</div>
+          </div>
+        </div>
+
+        {/* Placeholder content */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="p-6 bg-white/60 dark:bg-gray-800/60 rounded-3xl shadow-lg backdrop-blur-xl h-64 flex items-center justify-center text-gray-500 dark:text-gray-400">
+            Orders Table Placeholder
+          </div>
+          <div className="p-6 bg-white/60 dark:bg-gray-800/60 rounded-3xl shadow-lg backdrop-blur-xl h-64 flex items-center justify-center text-gray-500 dark:text-gray-400">
+            Plans Overview Placeholder
+          </div>
+        </div>
+      </main>
+    </div>
   );
 };
-
-/* ---------- Components ---------- */
-
-const StatCard = ({
-  title,
-  value,
-  icon,
-}: {
-  title: string;
-  value: string;
-  icon: JSX.Element;
-}) => (
-  <div className="bg-white dark:bg-gray-900 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-800">
-    <div className="flex items-center justify-between mb-4">
-      <h4 className="text-sm text-gray-500 dark:text-gray-400">{title}</h4>
-      <div className="text-purple-600">{icon}</div>
-    </div>
-    <div className="text-3xl font-bold text-gray-900 dark:text-white">
-      {value}
-    </div>
-  </div>
-);
-
-const ActionCard = ({ title }: { title: string }) => (
-  <button className="bg-gray-50 dark:bg-gray-800 rounded-xl p-5 text-left hover:bg-purple-50 dark:hover:bg-gray-700 transition border border-gray-100 dark:border-gray-700">
-    <h4 className="font-semibold text-gray-900 dark:text-white mb-1">
-      {title}
-    </h4>
-    <p className="text-sm text-gray-500 dark:text-gray-400">
-      This section will be activated once data is added
-    </p>
-  </button>
-);
 
 export default MerchantDashboard;
