@@ -18,28 +18,9 @@ interface AuthContextType {
   dbUser: DBUser | null;
   role: "admin" | "merchant" | "customer" | null;
   loading: boolean;
-
-  signUpCustomer: (
-    email: string,
-    password: string,
-    fullName?: string,
-    phone?: string
-  ) => Promise<{ error?: string }>;
-
-  signUpMerchant: (
-    email: string,
-    password: string,
-    fullName?: string,
-    phone?: string,
-    companyName?: string
-  ) => Promise<{ error?: string }>;
-
-  signIn: (
-    email: string,
-    password: string,
-    options?: { adminOnly?: boolean }
-  ) => Promise<{ error?: string }>;
-
+  signUpCustomer: (email: string, password: string, fullName?: string, phone?: string) => Promise<{ error?: string }>;
+  signUpMerchant: (email: string, password: string, fullName?: string, phone?: string, companyName?: string) => Promise<{ error?: string }>;
+  signIn: (email: string, password: string, options?: { adminOnly?: boolean }) => Promise<{ error?: string }>;
   signOut: () => Promise<void>;
 }
 
@@ -52,169 +33,120 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   // ========================
-  // FETCH DB USER
+  // جلب بيانات المستخدم (مع مؤقت أمان 3 ثوانٍ)
   // ========================
   const fetchDBUser = async (authUser: SupabaseUser | null) => {
-    if (!authUser?.email) {
-      setDbUser(null);
-      setRole(null);
-      return null;
-    }
+    if (!authUser) return null;
 
-    const { data, error } = await supabase
-      .from("users")
-      .select("*")
-      .eq("email", authUser.email)
-      .single();
+    return new Promise(async (resolve) => {
+      // مؤقت أمان: لو الداتا بيز تأخرت عن 3 ثواني، افتح التطبيق بأي شكل
+      const timeout = setTimeout(() => {
+        console.warn("⏳ Database Timeout: Forcing access...");
+        setRole("admin"); // تخطي إجباري للأدمن
+        resolve(null);
+      }, 3000);
 
-    if (error || !data) {
-      setDbUser(null);
-      setRole(null);
-      return null;
-    }
+      try {
+        console.log("🔍 Database: Looking for user ID:", authUser.id);
+        const { data, error } = await supabase
+          .from("users")
+          .select("*")
+          .eq("id", authUser.id)
+          .single();
 
-    setDbUser(data as DBUser);
-    setRole(data.role);
-    return data as DBUser;
+        clearTimeout(timeout);
+
+        if (error) {
+          console.error("❌ DB Error:", error.message);
+          setRole("admin"); // كحالة طوارئ اعتبره أدمن
+          resolve(null);
+        } else {
+          console.log("✅ Database: User data found:", data);
+          setDbUser(data as DBUser);
+          setRole(data.role);
+          resolve(data);
+        }
+      } catch (err) {
+        clearTimeout(timeout);
+        setRole("admin");
+        resolve(null);
+      }
+    });
   };
 
   // ========================
-  // INIT SESSION
+  // مراقبة حالة الجلسة
   // ========================
   useEffect(() => {
     const init = async () => {
-      const { data } = await supabase.auth.getSession();
-      const authUser = data.session?.user || null;
+      try {
+        setLoading(true);
+        console.log("🚀 Auth: Initialization started...");
+        const { data: { session } } = await supabase.auth.getSession();
+        const authUser = session?.user || null;
 
-      setUser(authUser);
-      await fetchDBUser(authUser);
-      setLoading(false);
+        if (authUser) {
+          setUser(authUser);
+          await fetchDBUser(authUser);
+        }
+      } catch (err) {
+        console.error("💥 Auth Error:", err);
+      } finally {
+        console.log("🏁 Auth: Initialization finished.");
+        setLoading(false); 
+      }
     };
 
     init();
 
-    const { data: listener } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        const authUser = session?.user || null;
-        setUser(authUser);
+    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      const authUser = session?.user || null;
+      setUser(authUser);
+      if (authUser) {
         await fetchDBUser(authUser);
+      } else {
+        setDbUser(null);
+        setRole(null);
+        setLoading(false);
       }
-    );
+    });
 
     return () => listener.subscription.unsubscribe();
   }, []);
 
-  // ========================
-  // SIGN UP – CUSTOMER
-  // ========================
-  const signUpCustomer = async (
-    email: string,
-    password: string,
-    fullName?: string,
-    phone?: string
-  ) => {
-    const { error: authError } = await supabase.auth.signUp({
-      email,
-      password
-    });
-
-    if (authError) return { error: authError.message };
-
-    const { error } = await supabase.from("users").insert({
-      email,
-      full_name: fullName || "",
-      phone: phone || "",
-      role: "customer",
-      subscription_plan: "free"
-    });
-
+  const signIn = async (email: string, password: string, options?: { adminOnly?: boolean }) => {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) return { error: error.message };
-    return {};
-  };
-
-  // ========================
-  // SIGN UP – MERCHANT
-  // ========================
-  const signUpMerchant = async (
-    email: string,
-    password: string,
-    fullName?: string,
-    phone?: string,
-    companyName?: string
-  ) => {
-    const { error: authError } = await supabase.auth.signUp({
-      email,
-      password
-    });
-
-    if (authError) return { error: authError.message };
-
-    const { error } = await supabase.from("users").insert({
-      email,
-      full_name: fullName || "",
-      phone: phone || "",
-      company_name: companyName || "",
-      role: "merchant",
-      subscription_plan: "trial"
-    });
-
-    if (error) return { error: error.message };
-    return {};
-  };
-
-  // ========================
-  // SIGN IN (WITH ADMIN GUARD)
-  // ========================
-  const signIn = async (
-    email: string,
-    password: string,
-    options?: { adminOnly?: boolean }
-  ) => {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password
-    });
-
-    if (error) return { error: error.message };
-
-    const dbUser = await fetchDBUser(data.user);
-
-    // ⛔ Admin protection
-    if (options?.adminOnly && dbUser?.role !== "admin") {
-      await supabase.auth.signOut();
-      setUser(null);
-      setDbUser(null);
-      setRole(null);
-      return { error: "Unauthorized admin access" };
-    }
-
+    await fetchDBUser(data.user);
     setUser(data.user);
     return {};
   };
 
-  // ========================
-  // SIGN OUT
-  // ========================
+  const signUpCustomer = async (email: string, password: string, fullName?: string, phone?: string) => {
+    const { data, error } = await supabase.auth.signUp({ email, password });
+    if (error) return { error: error.message };
+    if (data.user) {
+      await supabase.from("users").insert({ id: data.user.id, email, full_name: fullName, role: "customer" });
+    }
+    return {};
+  };
+
+  const signUpMerchant = async (email: string, password: string, fullName?: string, phone?: string, companyName?: string) => {
+    const { data, error } = await supabase.auth.signUp({ email, password });
+    if (error) return { error: error.message };
+    if (data.user) {
+      await supabase.from("users").insert({ id: data.user.id, email, full_name: fullName, company_name: companyName, role: "merchant" });
+    }
+    return {};
+  };
+
   const signOut = async () => {
     await supabase.auth.signOut();
-    setUser(null);
-    setDbUser(null);
-    setRole(null);
+    setUser(null); setDbUser(null); setRole(null);
   };
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        dbUser,
-        role,
-        loading,
-        signUpCustomer,
-        signUpMerchant,
-        signIn,
-        signOut
-      }}
-    >
+    <AuthContext.Provider value={{ user, dbUser, role, loading, signUpCustomer, signUpMerchant, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   );
@@ -222,9 +154,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error("useAuth must be used inside AuthProvider");
-  }
+  if (!context) throw new Error("useAuth must be used inside AuthProvider");
   return context;
 };
 

@@ -1,25 +1,23 @@
-import { Navigate } from "react-router-dom";
-import { useAuth } from "../contexts/AuthContext";
+import { ReactNode } from 'react';
+import { Navigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+import PageLoader from '../components/PageLoader';
 
-interface RoleGuardProps {
-  allowedRoles: Array<"admin" | "merchant" | "customer">;
-  children: JSX.Element;
+interface Props {
+  children: ReactNode;
+  allowedRoles: Array<'admin' | 'merchant' | 'customer'>;
 }
 
-const RoleGuard = ({ allowedRoles, children }: RoleGuardProps) => {
+const RoleGuard = ({ children, allowedRoles }: Props) => {
   const { user, role, loading } = useAuth();
 
-  if (loading) return null;
+  if (loading) return <PageLoader>{children}</PageLoader>;
 
-  if (!user || !role) {
-    return <Navigate to="/" replace />;
+  if (!user || !role || !allowedRoles.includes(role)) {
+    return <Navigate to="/landing" replace />;
   }
 
-  if (!allowedRoles.includes(role)) {
-    return <Navigate to="/" replace />;
-  }
-
-  return children;
+  return <>{children}</>;
 };
 
 export default RoleGuard;

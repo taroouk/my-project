@@ -2,11 +2,8 @@
 import React from 'react';
 import { User, Star, Gift, LogOut } from 'lucide-react';
 
-interface CustomerDashboardProps {
-  onClose: () => void | Promise<void>;
-}
 
-const CustomerDashboard: React.FC<CustomerDashboardProps> = ({ onClose }) => {
+const  CustomerDashboard: React.FC = () => {
   return (
     <div className="flex h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50 dark:from-gray-900 dark:via-gray-950 dark:to-gray-900 text-gray-900 dark:text-gray-100">
       
@@ -33,7 +30,7 @@ const CustomerDashboard: React.FC<CustomerDashboardProps> = ({ onClose }) => {
         </nav>
 
         <button
-          onClick={onClose}
+          onClick={() => console.log('Logout clicked')}
           className="flex items-center space-x-2 w-full p-3 m-4 rounded-lg hover:bg-red-100 dark:hover:bg-red-700 transition-colors text-red-600 dark:text-red-400"
         >
           <LogOut className="w-5 h-5" />

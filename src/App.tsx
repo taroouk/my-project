@@ -1,174 +1,134 @@
 import { useState, useEffect } from 'react';
-import { Sun, Moon } from 'lucide-react';
 import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
 
 import { useAuth } from './contexts/AuthContext';
 import { useTheme } from './contexts/ThemeContext';
 
-// ================= PAGES =================
+// PAGES & COMPONENTS
 import Signup from './pages/Signup';
 import BookingPage from './pages/BookingPage';
 import Packages from './pages/Packages';
-
-// ================= LANDING =================
 import LandingPage from './components/LandingPage';
-
-// ================= AUTH =================
 import AdminLogin from './pages/admin/AdminLogin';
 import MerchantLogin from './pages/auth/MerchantLogin';
 import CustomerLogin from './pages/auth/CustomerLogin';
-
-// ================= DASHBOARDS =================
 import AdminDashboard from './pages/admin/AdminDashboard';
 import CustomerDashboard from './pages/dashboard/customer/CustomerDashboard';
 import MerchantDashboard from './pages/dashboard/merchant/MerchantDashboard';
-
-// ================= COMMON COMPONENTS =================
-import HRDashboard from './components/HRDashboard';
-import LoyaltySystem from './components/LoyaltySystem';
-import WebsiteBuilder from './components/WebsiteBuilder';
-import ContactPage from './components/ContactPage';
-import FAQPage from './components/FAQPage';
+// تأكد أن PageLoader سليم، وإذا استمرت الصفحة بيضاء استبدله بـ div بسيط كما فعلت بالأسفل
 import PageLoader from './components/PageLoader';
-import SubscriptionPlans from './components/SubscriptionPlans';
 
-// ================= GUARDS =================
+// GUARDS
 import RequireAdmin from './routes/RequireAdmin';
 import RoleGuard from './routes/RoleGuard';
 
 function App() {
-  const [language, setLanguage] = useState<'ar' | 'en'>('ar');
-  const [isDemo, setIsDemo] = useState(false);
-
-  const { user, role, signOut } = useAuth();
-  const { isDarkMode, toggleDarkMode } = useTheme();
+  const { user, role, loading } = useAuth();
+  const { isDarkMode } = useTheme();
   const navigate = useNavigate();
+  const [language, setLanguage] = useState<'ar' | 'en'>('ar');
 
-  const isAuthenticated = !!user || isDemo;
+  // ==========================================
+  // معالجة حالة التحميل (تشخيص الأعطال)
+  // ==========================================
+  if (loading) {
+    return (
+      <div style={{ 
+        height: '100vh', 
+        display: 'flex', 
+        alignItems: 'center', 
+        justifyContent: 'center', 
+        background: isDarkMode ? '#111827' : '#f9fafb',
+        color: isDarkMode ? '#fff' : '#000',
+        fontFamily: 'sans-serif'
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <div className="animate-spin" style={{ fontSize: '2rem', marginBottom: '10px' }}>⏳</div>
+          <p>جاري تحميل النظام...</p>
+          <p style={{ fontSize: '12px', opacity: 0.6 }}>Checking session & database role</p>
+        </div>
+      </div>
+    ); 
+  }
 
-  useEffect(() => {
-    const demoStatus = localStorage.getItem('isDemo');
-    if (demoStatus === 'true') {
-      setIsDemo(true);
-    }
-  }, []);
+  const isAuthenticated = !!user;
 
-  const handleLogout = async () => {
-    if (isDemo) {
-      setIsDemo(false);
-      localStorage.removeItem('isDemo');
-    } else {
-      await signOut();
-    }
-    navigate('/');
+  // توجيه المستخدم حسب دوره عند الدخول على الصفحة الرئيسية
+  const HomePageRedirect = () => {
+    console.log("Redirecting... User Role is:", role);
+    if (role === 'admin') return <Navigate to="/admin" replace />;
+    if (role === 'merchant') return <Navigate to="/dashboard/merchant" replace />;
+    if (role === 'customer') return <Navigate to="/dashboard/customer" replace />;
+    return <Navigate to="/landing" replace />;
   };
 
-  // ================= HOME (AFTER LOGIN) =================
-  const HomePage = () => (
-    <div className={`min-h-screen ${language === 'ar' ? 'rtl' : 'ltr'}`}>
-      <header className="p-4 flex justify-between items-center bg-white shadow">
-        <h1 className="font-bold text-lg">Servly</h1>
-
-        <div className="flex items-center gap-4">
-          <button onClick={toggleDarkMode}>
-            {isDarkMode ? <Sun /> : <Moon />}
-          </button>
-
-          <button
-            onClick={handleLogout}
-            className="text-red-600 font-medium"
-          >
-            Logout
-          </button>
-        </div>
-      </header>
-
-      <main className="p-6">
-        <h2 className="text-xl font-semibold mb-2">Welcome</h2>
-        <p className="text-gray-600">Role: {role}</p>
-      </main>
-    </div>
-  );
-
   return (
-    <Routes>
+    <div className={isDarkMode ? 'dark' : ''}>
+      <Routes>
+        {/* المسار الرئيسي */}
+        <Route 
+          path="/" 
+          element={isAuthenticated ? <HomePageRedirect /> : <Navigate to="/landing" replace />} 
+        />
 
-      {/* ================= PUBLIC ================= */}
-      <Route
-        path="/"
-        element={
-          isAuthenticated ? <HomePage /> : <Navigate to="/landing" />
-        }
-      />
+        {/* صفحة الهبوط */}
+        <Route 
+          path="/landing" 
+          element={
+            !isAuthenticated ? (
+              <LandingPage 
+                language={language} 
+                setLanguage={setLanguage}
+                onGetStarted={() => navigate('/signup')}
+                onCustomerLogin={() => navigate('/login/customer')}
+                onMerchantLogin={() => navigate('/login/merchant')}
+              />
+            ) : (
+              <Navigate to="/" replace />
+            )
+          } 
+        />
 
-      <Route
-        path="/landing"
-        element={
-          !isAuthenticated ? (
-            <LandingPage
-              onMerchantLogin={() => navigate('/login/merchant')}
-              onCustomerLogin={() => navigate('/login/customer')}
-              onGetStarted={() => navigate('/signup')}
-              language={language}
-              setLanguage={setLanguage}
-            />
-          ) : (
-            <Navigate to="/" />
-          )
-        }
-      />
+        <Route path="/signup" element={<Signup />} />
 
-      <Route path="/signup" element={<Signup />} />
+        {/* AUTH ROUTES */}
+        <Route path="/login/admin" element={<AdminLogin />} />
+        <Route path="/login/merchant" element={<MerchantLogin />} />
+        <Route path="/login/customer" element={<CustomerLogin />} />
 
-      {/* ================= AUTH ================= */}
-      <Route path="/login/admin" element={<AdminLogin />} />
-      <Route path="/login/merchant" element={<MerchantLogin />} />
-      <Route path="/login/customer" element={<CustomerLogin />} />
+        {/* PROTECTED ROUTES */}
+        <Route
+          path="/admin/*"
+          element={
+            <RequireAdmin>
+              <AdminDashboard />
+            </RequireAdmin>
+          }
+        />
 
-      {/* ================= ADMIN ================= */}
-      <Route
-        path="/admin/*"
-        element={
-          <RequireAdmin>
-            <AdminDashboard onClose={handleLogout} />
-          </RequireAdmin>
-        }
-      />
+        <Route
+          path="/dashboard/customer/*"
+          element={
+            <RoleGuard allowedRoles={['customer']}>
+              <CustomerDashboard />
+            </RoleGuard>
+          }
+        />
 
-      {/* ================= CUSTOMER ================= */}
-      <Route
-        path="/dashboard/customer/*"
-        element={
-          <RoleGuard allowedRoles={['customer']}>
-            <CustomerDashboard onClose={handleLogout} />
-          </RoleGuard>
-        }
-      />
+        <Route
+          path="/dashboard/merchant/*"
+          element={
+            <RoleGuard allowedRoles={['merchant']}>
+              <MerchantDashboard />
+            </RoleGuard>
+          }
+        />
 
-      {/* ================= MERCHANT ================= */}
-      <Route
-        path="/dashboard/merchant/*"
-        element={
-          <RoleGuard allowedRoles={['merchant']}>
-            <MerchantDashboard onClose={handleLogout} />
-          </RoleGuard>
-        }
-      />
-
-      {/* ================= COMMON PAGES ================= */}
-      <Route path="/hr" element={<PageLoader><HRDashboard /></PageLoader>} />
-      <Route path="/loyalty" element={<PageLoader><LoyaltySystem /></PageLoader>} />
-      <Route path="/website" element={<PageLoader><WebsiteBuilder /></PageLoader>} />
-      <Route path="/contact" element={<PageLoader><ContactPage /></PageLoader>} />
-      <Route path="/faq" element={<PageLoader><FAQPage /></PageLoader>} />
-      <Route path="/subscriptions" element={<PageLoader><SubscriptionPlans /></PageLoader>} />
-      <Route path="/booking" element={<PageLoader><BookingPage /></PageLoader>} />
-      <Route path="/packages" element={<PageLoader><Packages /></PageLoader>} />
-
-      {/* ================= FALLBACK ================= */}
-      <Route path="*" element={<Navigate to="/" />} />
-
-    </Routes>
+        {/* FALLBACK */}
+        <Route path="/unauthorized" element={<div className="h-screen flex items-center justify-center">Unauthorized Access</div>} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </div>
   );
 }
 
