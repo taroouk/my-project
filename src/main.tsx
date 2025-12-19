@@ -1,24 +1,20 @@
-import { StrictMode } from 'react';
-import { createRoot } from 'react-dom/client';
+// src/main.tsx
+import React from 'react';
+import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
-import AuthProvider from './contexts/AuthContext';
-import { ThemeContextProvider } from './contexts/ThemeContext';
-import { SiteSettingsProvider } from './contexts/SiteSettingsContext';
 import App from './App';
+import { AuthProvider } from './contexts/AuthContext';
+import { ThemeProvider } from './contexts/ThemeContext'; // الآن سيعمل!
 import './index.css';
 
-const root = createRoot(document.getElementById('root')!);
-
-root.render(
-  <StrictMode>
-    <ThemeContextProvider>
-      <AuthProvider>
-        <BrowserRouter>
-          <SiteSettingsProvider>
-            <App />
-          </SiteSettingsProvider>
-        </BrowserRouter>
-      </AuthProvider>
-    </ThemeContextProvider>
-  </StrictMode>
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <React.StrictMode>
+    <BrowserRouter>
+      <ThemeProvider>
+        <AuthProvider>
+          <App />
+        </AuthProvider>
+      </ThemeProvider>
+    </BrowserRouter>
+  </React.StrictMode>
 );

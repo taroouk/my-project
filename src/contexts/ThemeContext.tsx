@@ -1,43 +1,33 @@
-// src/contexts/ThemeContext.tsx
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 
 interface ThemeContextType {
   isDarkMode: boolean;
-  toggleDarkMode: () => void;
-  setDarkMode: (value: boolean) => void;
+  toggleTheme: () => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
-export const ThemeContextProvider = ({ children }: { children: ReactNode }) => {
-  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
-    // قراءة القيمة المحفوظة
-    return localStorage.getItem('theme') === 'dark';
+export const ThemeProvider = ({ children }: { children: ReactNode }) => {
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    // التحقق من التفضيل المحفوظ أو تفضيل النظام
+    const saved = localStorage.getItem('theme');
+    return saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches);
   });
 
-  // مزامنة الـ dark mode مع <html>
   useEffect(() => {
-    const root = document.documentElement;
-
     if (isDarkMode) {
-      root.classList.add('dark');
+      document.documentElement.classList.add('dark');
       localStorage.setItem('theme', 'dark');
     } else {
-      root.classList.remove('dark');
+      document.documentElement.classList.remove('dark');
       localStorage.setItem('theme', 'light');
     }
   }, [isDarkMode]);
 
-  const toggleDarkMode = () => {
-    setIsDarkMode(prev => !prev);
-  };
-
-  const setDarkMode = (value: boolean) => {
-    setIsDarkMode(value);
-  };
+  const toggleTheme = () => setIsDarkMode(!isDarkMode);
 
   return (
-    <ThemeContext.Provider value={{ isDarkMode, toggleDarkMode, setDarkMode }}>
+    <ThemeContext.Provider value={{ isDarkMode, toggleTheme }}>
       {children}
     </ThemeContext.Provider>
   );
@@ -45,8 +35,6 @@ export const ThemeContextProvider = ({ children }: { children: ReactNode }) => {
 
 export const useTheme = () => {
   const context = useContext(ThemeContext);
-  if (!context) {
-    throw new Error('useTheme must be used inside ThemeContextProvider');
-  }
+  if (!context) throw new Error('useTheme must be used within a ThemeProvider');
   return context;
 };

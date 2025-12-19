@@ -2,14 +2,13 @@ import { createContext, useContext, useEffect, useState, ReactNode } from "react
 import { supabase } from "../lib/supabaseClient";
 import { User as SupabaseUser } from "@supabase/auth-js";
 
+// تعريف شكل بيانات المستخدم في قاعدة البيانات
 export interface DBUser {
   id: string;
   email: string;
   full_name?: string;
-  phone?: string;
-  company_name?: string;
   role: "admin" | "merchant" | "customer";
-  subscription_plan?: string;
+  store_slug?: string;
   created_at?: string;
 }
 
@@ -18,10 +17,10 @@ interface AuthContextType {
   dbUser: DBUser | null;
   role: "admin" | "merchant" | "customer" | null;
   loading: boolean;
-  signUpCustomer: (email: string, password: string, fullName?: string, phone?: string) => Promise<{ error?: string }>;
-  signUpMerchant: (email: string, password: string, fullName?: string, phone?: string, companyName?: string) => Promise<{ error?: string }>;
-  signIn: (email: string, password: string, options?: { adminOnly?: boolean }) => Promise<{ error?: string }>;
+  signUp: (email: string, password: string, role: string, metadata: any) => Promise<{ error?: string; data?: any }>;
+  signIn: (email: string, password: string) => Promise<{ error?: string; data?: any }>;
   signOut: () => Promise<void>;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -32,121 +31,169 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [role, setRole] = useState<"admin" | "merchant" | "customer" | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // ========================
-  // جلب بيانات المستخدم (مع مؤقت أمان 3 ثوانٍ)
-  // ========================
-  const fetchDBUser = async (authUser: SupabaseUser | null) => {
-    if (!authUser) return null;
+  // وظيفة جلب بيانات المستخدم من جدول public.users
+  const fetchDBUser = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from("users")
+        .select("*")
+        .eq("id", userId)
+        .maybeSingle();
 
-    return new Promise(async (resolve) => {
-      // مؤقت أمان: لو الداتا بيز تأخرت عن 3 ثواني، افتح التطبيق بأي شكل
-      const timeout = setTimeout(() => {
-        console.warn("⏳ Database Timeout: Forcing access...");
-        setRole("admin"); // تخطي إجباري للأدمن
-        resolve(null);
-      }, 3000);
+      if (error) throw error;
 
-      try {
-        console.log("🔍 Database: Looking for user ID:", authUser.id);
-        const { data, error } = await supabase
-          .from("users")
-          .select("*")
-          .eq("id", authUser.id)
-          .single();
-
-        clearTimeout(timeout);
-
-        if (error) {
-          console.error("❌ DB Error:", error.message);
-          setRole("admin"); // كحالة طوارئ اعتبره أدمن
-          resolve(null);
-        } else {
-          console.log("✅ Database: User data found:", data);
-          setDbUser(data as DBUser);
-          setRole(data.role);
-          resolve(data);
-        }
-      } catch (err) {
-        clearTimeout(timeout);
-        setRole("admin");
-        resolve(null);
+      if (data) {
+        setDbUser(data as DBUser);
+        setRole(data.role);
+        return data;
       }
-    });
+    } catch (err) {
+      console.error("Critical error fetching profile from DB:", err);
+    }
+    return null;
   };
 
-  // ========================
-  // مراقبة حالة الجلسة
-  // ========================
+  // وظيفة تحديث البيانات يدوياً
+  const refreshUser = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        setUser(session.user);
+        setRole(session.user.user_metadata?.role || null);
+        await fetchDBUser(session.user.id);
+      }
+    } catch (err) {
+      console.error("Refresh User Error:", err);
+    }
+  };
+
   useEffect(() => {
-    const init = async () => {
+    // مؤقت أمان: إذا استغرق التحميل أكثر من 3 ثوانٍ، افتح التطبيق بأي حال
+    const safetyTimer = setTimeout(() => {
+      if (loading) {
+        console.warn("Auth initialization timed out. Forcing loading to false.");
+        setLoading(false);
+      }
+    }, 3500);
+
+    const initializeAuth = async () => {
       try {
         setLoading(true);
-        console.log("🚀 Auth: Initialization started...");
         const { data: { session } } = await supabase.auth.getSession();
         const authUser = session?.user || null;
-
+        
+        setUser(authUser);
         if (authUser) {
-          setUser(authUser);
-          await fetchDBUser(authUser);
+          // تحديث الرتبة فوراً من الميتاداتا لسرعة التوجيه
+          setRole(authUser.user_metadata?.role || null);
+          // ثم جلب البيانات الكاملة من القاعدة
+          await fetchDBUser(authUser.id);
         }
       } catch (err) {
-        console.error("💥 Auth Error:", err);
+        console.error("Initialization Error:", err);
       } finally {
-        console.log("🏁 Auth: Initialization finished.");
-        setLoading(false); 
+        setLoading(false);
+        clearTimeout(safetyTimer);
       }
     };
 
-    init();
+    initializeAuth();
 
-    const { data: listener } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    // مراقبة تغييرات حالة تسجيل الدخول
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log("Auth Event:", event);
       const authUser = session?.user || null;
       setUser(authUser);
+
       if (authUser) {
-        await fetchDBUser(authUser);
+        setRole(authUser.user_metadata?.role || null);
+        await fetchDBUser(authUser.id);
       } else {
         setDbUser(null);
         setRole(null);
-        setLoading(false);
       }
+      setLoading(false);
     });
 
-    return () => listener.subscription.unsubscribe();
+    return () => {
+      authListener.subscription.unsubscribe();
+      clearTimeout(safetyTimer);
+    };
   }, []);
 
-  const signIn = async (email: string, password: string, options?: { adminOnly?: boolean }) => {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) return { error: error.message };
-    await fetchDBUser(data.user);
-    setUser(data.user);
-    return {};
+  const signUp = async (email: string, password: string, role: string, metadata: any) => {
+    try {
+      const { data, error: authError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            role: role,
+            full_name: metadata.full_name,
+          }
+        }
+      });
+
+      if (authError) return { error: authError.message };
+
+      if (data.user) {
+        // إنشاء سجل في جدول المستخدمين
+        const { error: dbError } = await supabase.from("users").insert({
+          id: data.user.id,
+          email: email,
+          role: role,
+          full_name: metadata.full_name || '',
+          store_slug: metadata.store_slug || null
+        });
+
+        if (dbError) console.warn("Sync delay (DB Insert):", dbError.message);
+      }
+
+      return { data };
+    } catch (err: any) {
+      return { error: err.message || "System error during signup" };
+    }
   };
 
-  const signUpCustomer = async (email: string, password: string, fullName?: string, phone?: string) => {
-    const { data, error } = await supabase.auth.signUp({ email, password });
-    if (error) return { error: error.message };
-    if (data.user) {
-      await supabase.from("users").insert({ id: data.user.id, email, full_name: fullName, role: "customer" });
-    }
-    return {};
-  };
+  const signIn = async (email: string, password: string) => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      
+      if (error) {
+        setLoading(false);
+        return { error: error.message };
+      }
 
-  const signUpMerchant = async (email: string, password: string, fullName?: string, phone?: string, companyName?: string) => {
-    const { data, error } = await supabase.auth.signUp({ email, password });
-    if (error) return { error: error.message };
-    if (data.user) {
-      await supabase.from("users").insert({ id: data.user.id, email, full_name: fullName, company_name: companyName, role: "merchant" });
+      if (data.user) {
+        setRole(data.user.user_metadata?.role || null);
+        await fetchDBUser(data.user.id);
+      }
+      
+      setLoading(false);
+      return { data };
+    } catch (err: any) {
+      setLoading(false);
+      return { error: "Login failed unexpectedy" };
     }
-    return {};
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
-    setUser(null); setDbUser(null); setRole(null);
+    try {
+      setLoading(true);
+      await supabase.auth.signOut();
+      setUser(null);
+      setDbUser(null);
+      setRole(null);
+    } catch (err) {
+      console.error("Signout Error:", err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <AuthContext.Provider value={{ user, dbUser, role, loading, signUpCustomer, signUpMerchant, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, dbUser, role, loading, signUp, signIn, signOut, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );
