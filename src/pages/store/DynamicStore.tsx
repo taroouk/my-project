@@ -1,14 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { supabase } from '../../lib/supabaseClient';
-import { useAuth } from '../../contexts/AuthContext';
 import BookingCalendar from '../../components/BookingCalendar';
-import { Clock, ShieldCheck, Star, ArrowLeft, Sparkles, AlertCircle } from 'lucide-react';
+import { Clock, ShieldCheck, Star, ArrowLeft, Sparkles, AlertCircle, Store, MapPin } from 'lucide-react';
 
 const DynamicStore = () => {
   const { slug } = useParams();
-  const { user: authUser } = useAuth();
-  const [merchant, setMerchant] = useState<any>(null);
+  const [store, setStore] = useState<any>(null);
   const [services, setServices] = useState<any[]>([]);
   const [selectedService, setSelectedService] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -23,23 +21,23 @@ const DynamicStore = () => {
         setLoading(true);
         setError(null);
 
-        // 1. جلب بيانات التاجر
-        const { data: profile, error: profileError } = await supabase
-          .from('users')
+        // 1. جلب بيانات المتجر من جدول stores (وليس users)
+        const { data: storeData, error: storeError } = await supabase
+          .from('stores')
           .select('*')
-          .eq('store_slug', slug)
-          .maybeSingle(); // استخدام maybeSingle لمنع توقف الكود عند عدم وجود نتائج
+          .eq('slug', slug)
+          .maybeSingle();
 
-        if (profileError) throw profileError;
+        if (storeError) throw storeError;
 
-        if (profile) {
-          setMerchant(profile);
+        if (storeData) {
+          setStore(storeData);
           
-          // 2. جلب الخدمات
+          // 2. جلب الخدمات المرتبطة بالتاجر صاحب هذا المتجر
           const { data: srvs, error: srvsError } = await supabase
             .from('services')
             .select('*')
-            .eq('merchant_id', profile.id);
+            .eq('merchant_id', storeData.merchant_id);
           
           if (srvsError) throw srvsError;
           setServices(srvs || []);
@@ -47,10 +45,9 @@ const DynamicStore = () => {
           setError("Store not found");
         }
       } catch (err: any) {
-        console.error("❌ Error fetching store:", err.message);
+        console.error("❌ Error:", err.message);
         setError(err.message);
       } finally {
-        // التأكد أن التحميل سيتوقف مهما حدث
         setLoading(false);
       }
     };
@@ -58,134 +55,112 @@ const DynamicStore = () => {
     fetchStoreData();
   }, [slug]);
 
-  const handleBookingComplete = async (bookingDetails: any) => {
+  const handleBookingComplete = () => {
     setBookingStatus('success');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // شاشة التحميل المحسنة
   if (loading) return (
-    <div className="h-screen flex flex-col items-center justify-center bg-white dark:bg-gray-950">
-      <div className="relative w-20 h-20">
-        <div className="absolute inset-0 border-4 border-purple-100 rounded-full"></div>
-        <div className="absolute inset-0 border-4 border-purple-600 border-t-transparent rounded-full animate-spin"></div>
-      </div>
-      <p className="mt-6 font-black text-gray-400 uppercase tracking-[0.3em] text-[10px] animate-pulse">
-        Synchronizing Storefront...
-      </p>
+    <div className="h-screen flex flex-col items-center justify-center bg-white">
+      <div className="w-16 h-16 border-4 border-gray-100 border-t-purple-600 rounded-full animate-spin" />
+      <p className="mt-4 font-black text-gray-400 text-[10px] tracking-widest uppercase">Building Experience...</p>
     </div>
   );
 
-  // شاشة الخطأ أو عدم وجود متجر
-  if (error || !merchant) return (
-    <div className="h-screen flex flex-col items-center justify-center bg-white p-10 text-center">
-      <div className="w-20 h-20 bg-red-50 text-red-500 rounded-3xl flex items-center justify-center mb-6">
-        <AlertCircle size={40} />
-      </div>
-      <h2 className="text-4xl font-black text-gray-900 mb-2 uppercase tracking-tighter">Store Not Found</h2>
-      <p className="text-gray-400 font-bold mb-8 italic">The link you followed may be broken or the store has moved.</p>
-      <Link to="/" className="bg-black text-white px-8 py-4 rounded-2xl font-black uppercase text-xs tracking-widest hover:scale-105 transition-all">
-        Go Back Home
-      </Link>
+  if (error || !store) return (
+    <div className="h-screen flex flex-col items-center justify-center p-10 text-center bg-gray-50">
+      <AlertCircle size={60} className="text-red-500 mb-6" />
+      <h2 className="text-4xl font-black mb-2 uppercase tracking-tighter">Store Not Found</h2>
+      <Link to="/" className="text-purple-600 font-bold underline">Return to Servly</Link>
     </div>
   );
 
-  const brandColor = merchant.brand_color || '#7c3aed';
+  const brandColor = store.theme_color || '#7c3aed';
+  const layout = store.layout_type || 'classic';
 
   if (bookingStatus === 'success') {
     return (
-      <div className="min-h-screen bg-white flex flex-col items-center justify-center p-10 text-center animate-in fade-in zoom-in-95 duration-500">
-        <div className="w-24 h-24 bg-emerald-100 text-emerald-600 rounded-[2.5rem] flex items-center justify-center mb-8 shadow-xl shadow-emerald-50">
-          <ShieldCheck size={48} strokeWidth={2.5} />
+      <div className="min-h-screen flex flex-col items-center justify-center p-6 text-center animate-in zoom-in-95">
+        <div className="w-24 h-24 bg-emerald-500 text-white rounded-[2rem] flex items-center justify-center mb-6 shadow-2xl shadow-emerald-200">
+          <ShieldCheck size={48} />
         </div>
-        <h2 className="text-5xl font-black tracking-tighter uppercase mb-4">Confirmed!</h2>
-        <p className="text-gray-400 font-bold max-w-md mx-auto mb-10 text-lg italic">
-          Everything is set with {merchant.company_name}. See you soon!
-        </p>
-        <button 
-          onClick={() => {setBookingStatus('idle'); setSelectedService(null);}}
-          className="bg-black text-white px-10 py-5 rounded-3xl font-black hover:scale-105 transition-all shadow-2xl"
-        >
-          Book Another Service
-        </button>
+        <h2 className="text-4xl font-black tracking-tighter mb-2 uppercase">Booking Confirmed!</h2>
+        <p className="text-gray-500 font-bold mb-8">We've sent the details to {store.name}.</p>
+        <button onClick={() => {setBookingStatus('idle'); setSelectedService(null);}} className="bg-black text-white px-10 py-5 rounded-2xl font-black uppercase text-xs tracking-widest">Book Another</button>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#FAFAFA] dark:bg-gray-950 font-sans transition-colors duration-500">
-      {/* Navigation */}
-      <nav className="sticky top-0 z-[60] bg-white/70 dark:bg-gray-900/70 backdrop-blur-2xl border-b border-gray-100 dark:border-gray-800 px-8 py-6 flex justify-between items-center">
-        <div className="flex items-center gap-4">
-          <div 
-            className="w-12 h-12 rounded-2xl flex items-center justify-center text-white font-black text-xl shadow-lg"
-            style={{ backgroundColor: brandColor }}
-          >
-            {merchant.company_name?.[0]}
+    <div className={`min-h-screen bg-[#FDFDFF] text-gray-900 ${store.theme_style === 'elegant' ? 'font-serif' : 'font-sans'}`}>
+      
+      {/* Dynamic Navbar */}
+      <nav className="sticky top-0 z-[100] bg-white/80 backdrop-blur-xl border-b border-gray-100 px-6 py-4 flex justify-between items-center">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-black shadow-lg" style={{ backgroundColor: brandColor }}>
+            {store.name?.[0]}
           </div>
-          <div>
-            <span className="text-2xl font-black tracking-tighter uppercase dark:text-white block leading-none">
-              {merchant.company_name}
-            </span>
-            <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
-              {merchant.business_type || 'Professional Service'}
-            </span>
-          </div>
+          <span className="font-black text-xl tracking-tighter uppercase">{store.name}</span>
         </div>
-        <div className="hidden md:flex items-center gap-2 text-[10px] font-black text-emerald-500 bg-emerald-50 px-4 py-2 rounded-full uppercase tracking-widest">
-          <ShieldCheck size={14} strokeWidth={3} /> Verified
+        <div className="hidden sm:flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-600 rounded-full text-[10px] font-black uppercase tracking-widest">
+           <ShieldCheck size={14} /> Trusted Partner
         </div>
       </nav>
 
-      {/* Hero */}
-      <header className="pt-24 pb-16 px-8 text-center max-w-5xl mx-auto">
-        <div className="inline-flex items-center gap-2 bg-purple-50 text-purple-600 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-[0.2em] mb-8">
-          <Sparkles size={14} /> New Slots Available
-        </div>
-        <h1 className="text-6xl md:text-8xl font-black mb-8 dark:text-white tracking-tighter leading-[0.9]">
-          {merchant.brand_tagline || 'Experience Premium'}
-        </h1>
-        <div className="flex justify-center items-center gap-6 text-gray-400 font-black text-xs uppercase tracking-widest">
-          <div className="flex items-center gap-1.5"><Star size={18} className="text-yellow-400 fill-yellow-400"/> 4.9 (120+)</div>
-          <span className="opacity-30">|</span>
-          <div>OPEN UNTIL 9:00 PM</div>
-        </div>
-      </header>
+      {/* Hero Section based on Layout */}
+      {layout === 'modern' ? (
+        <header className="relative h-[40vh] bg-gray-900 flex items-end p-12 overflow-hidden" style={{ backgroundColor: brandColor }}>
+          <div className="absolute inset-0 opacity-20 bg-[url('https://images.unsplash.com/photo-1521590832167-7bcbfaa6381f?q=80&w=2070')] bg-cover bg-center" />
+          <div className="relative z-10 text-white max-w-5xl mx-auto w-full">
+            <h1 className="text-6xl md:text-8xl font-black tracking-tighter leading-none mb-4 uppercase">{store.name}</h1>
+            <p className="text-xl opacity-90 font-bold italic">{store.description}</p>
+          </div>
+        </header>
+      ) : (
+        <header className="pt-20 pb-12 px-6 text-center max-w-4xl mx-auto animate-in slide-in-from-top-4">
+          <div className="w-24 h-24 mx-auto mb-8 rounded-[2rem] flex items-center justify-center text-white shadow-2xl transition-transform hover:rotate-12" style={{ backgroundColor: brandColor }}>
+            <Store size={40} />
+          </div>
+          <h1 className="text-5xl md:text-7xl font-black tracking-tighter uppercase mb-4 leading-none">{store.name}</h1>
+          <p className="text-gray-400 text-lg font-bold tracking-tight max-w-xl mx-auto">{store.description}</p>
+          <div className="flex justify-center gap-6 mt-8">
+             <div className="flex items-center gap-1 text-xs font-black uppercase tracking-widest"><Star size={14} className="text-yellow-400 fill-yellow-400" /> 5.0</div>
+             <div className="flex items-center gap-1 text-xs font-black uppercase tracking-widest"><MapPin size={14} /> Instant Booking</div>
+          </div>
+        </header>
+      )}
 
       {/* Main Grid */}
-      <main className="max-w-7xl mx-auto px-8 pb-40 grid grid-cols-1 lg:grid-cols-12 gap-16">
-        <div className="lg:col-span-7 space-y-10">
-          <div className="flex items-center justify-between">
-            <h3 className="text-3xl font-black dark:text-white tracking-tighter uppercase italic">Select Service</h3>
-            <div className="h-[2px] flex-1 mx-6 bg-gray-100 dark:bg-gray-800"></div>
+      <main className={`max-w-7xl mx-auto px-6 py-12 grid grid-cols-1 lg:grid-cols-12 gap-12 ${layout === 'modern' ? '-mt-10' : ''}`}>
+        
+        {/* Services Side */}
+        <div className="lg:col-span-7">
+          <div className="flex items-center gap-4 mb-8">
+            <h2 className="text-2xl font-black uppercase italic tracking-tighter">Available Services</h2>
+            <div className="h-[2px] flex-1 bg-gray-100" />
           </div>
 
-          <div className="space-y-4">
+          <div className={`grid gap-4 ${layout === 'grid' ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'}`}>
             {services.map((s) => (
               <div 
                 key={s.id}
                 onClick={() => setSelectedService(s)}
-                className={`group p-10 rounded-[3.5rem] border-4 transition-all duration-500 cursor-pointer relative overflow-hidden ${
+                className={`group p-8 rounded-[2.5rem] border-4 transition-all duration-300 cursor-pointer relative ${
                   selectedService?.id === s.id 
-                  ? 'border-transparent bg-white dark:bg-gray-900 shadow-2xl scale-[1.03]' 
-                  : 'border-transparent bg-white/40 dark:bg-gray-900/40 hover:bg-white'
+                  ? 'bg-white border-transparent shadow-2xl scale-[1.02]' 
+                  : 'bg-white/50 border-transparent hover:bg-white hover:shadow-xl'
                 }`}
               >
-                <div className="flex justify-between items-center relative z-10">
-                  <div className="flex-1">
-                    <h4 className="font-black text-2xl mb-3 dark:text-white uppercase tracking-tight group-hover:text-purple-600 transition-colors">
-                      {s.name}
-                    </h4>
-                    <div className="flex items-center gap-4 text-xs font-black text-gray-400 uppercase tracking-widest">
-                      <span className="flex items-center gap-1.5 bg-gray-50 dark:bg-gray-800 px-3 py-1.5 rounded-xl">
-                        <Clock size={16} className="text-purple-500" /> {s.duration_minutes} MIN
-                      </span>
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h3 className="text-xl font-black uppercase mb-2 group-hover:text-purple-600 transition-colors">{s.name}</h3>
+                    <div className="flex items-center gap-3 text-[10px] font-black text-gray-400 uppercase tracking-widest">
+                       <span className="flex items-center gap-1 bg-gray-50 px-2 py-1 rounded-lg"><Clock size={12} /> {s.duration_minutes} MIN</span>
+                       {selectedService?.id === s.id && <span className="text-emerald-500 flex items-center gap-1"><Sparkles size={12} /> Selected</span>}
                     </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-4xl font-black tracking-tighter dark:text-white" style={{ color: selectedService?.id === s.id ? brandColor : '' }}>
-                      ${s.price}
-                    </p>
+                  <div className="text-2xl font-black tracking-tighter" style={{ color: selectedService?.id === s.id ? brandColor : '' }}>
+                    ${s.price}
                   </div>
                 </div>
               </div>
@@ -193,40 +168,41 @@ const DynamicStore = () => {
           </div>
         </div>
 
-        {/* Calendar Sidebar */}
+        {/* Booking Sidebar */}
         <div className="lg:col-span-5 relative">
-          <div className="sticky top-32">
-            {selectedService ? (
-              <div className="animate-in fade-in slide-in-from-bottom-10 duration-700">
-                <div className="bg-white dark:bg-gray-900 rounded-[4rem] p-4 shadow-3xl border border-gray-50 dark:border-gray-800 relative overflow-hidden">
-                   <div className="absolute top-0 left-0 right-0 h-2" style={{ backgroundColor: brandColor }}></div>
-                   <BookingCalendar 
-                     serviceId={selectedService.id} 
-                     merchantId={merchant.id} 
-                     onBookingComplete={handleBookingComplete} 
-                   />
+           <div className="sticky top-28">
+              {selectedService ? (
+                <div className="animate-in fade-in slide-in-from-bottom-6 duration-500">
+                  <div className="bg-white rounded-[3rem] p-4 shadow-3xl border border-gray-50 overflow-hidden relative">
+                    <div className="absolute top-0 left-0 right-0 h-1.5" style={{ backgroundColor: brandColor }} />
+                    <div className="p-4 border-b border-gray-50 mb-4 flex justify-between items-center">
+                       <span className="font-black text-[10px] uppercase tracking-widest text-gray-400">Checkout</span>
+                       <button onClick={() => setSelectedService(null)} className="p-2 hover:bg-gray-50 rounded-full"><ArrowLeft size={16}/></button>
+                    </div>
+                    <BookingCalendar 
+                      serviceId={selectedService.id} 
+                      merchantId={store.merchant_id} 
+                      onBookingComplete={handleBookingComplete} 
+                    />
+                  </div>
                 </div>
-                <button 
-                  onClick={() => setSelectedService(null)}
-                  className="mt-6 w-full flex items-center justify-center gap-2 text-gray-400 font-black uppercase text-[10px] tracking-widest hover:text-black transition-colors"
-                >
-                  <ArrowLeft size={14} /> Back to Services
-                </button>
-              </div>
-            ) : (
-              <div className="h-[500px] border-4 border-dashed border-gray-100 dark:border-gray-800 rounded-[4rem] flex flex-col items-center justify-center text-center p-12 group transition-all">
-                <div className="w-24 h-24 bg-gray-50 dark:bg-gray-800 rounded-full flex items-center justify-center mb-8 text-gray-200 group-hover:scale-110 group-hover:text-purple-200 transition-all duration-500">
-                  <Clock size={48} strokeWidth={1} />
+              ) : (
+                <div className="h-[400px] border-4 border-dashed border-gray-100 rounded-[3rem] flex flex-col items-center justify-center text-center p-10">
+                   <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center text-gray-200 mb-4">
+                      <Clock size={32} />
+                   </div>
+                   <h4 className="font-black text-gray-300 uppercase tracking-tighter text-xl">Select a service</h4>
+                   <p className="text-[10px] font-black text-gray-300 uppercase tracking-[0.2em] mt-2">to view available time slots</p>
                 </div>
-                <h4 className="font-black text-gray-300 text-2xl uppercase tracking-tighter mb-4">Secure Your Spot</h4>
-                <p className="text-gray-300 text-xs font-black uppercase tracking-[0.2em]">
-                  Select a service to unlock slots
-                </p>
-              </div>
-            )}
-          </div>
+              )}
+           </div>
         </div>
       </main>
+
+      {/* Footer */}
+      <footer className="py-20 text-center border-t border-gray-50">
+         <p className="text-[10px] font-black text-gray-300 uppercase tracking-[0.5em]">Powered by Servly</p>
+      </footer>
     </div>
   );
 };

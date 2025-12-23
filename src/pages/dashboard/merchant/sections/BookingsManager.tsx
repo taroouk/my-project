@@ -2,104 +2,110 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../../../../lib/supabaseClient';
 import { useAuth } from '../../../../contexts/AuthContext';
 import { 
-  CheckCircle, 
-  XCircle, 
-  Clock, 
-  User, 
-  Calendar as CalendarIcon,
-  Search,
-  ChevronRight,
-  Award
+  Calendar, Clock, User, CheckCircle2, XCircle, 
+  AlertCircle, ChevronRight, Phone, MessageSquare,
+  Filter, Search, MoreHorizontal, Loader2, Scissors
 } from 'lucide-react';
-import { format } from 'date-fns';
+
+interface Booking {
+  id: string;
+  customer_name: string;
+  customer_phone: string;
+  service_name: string;
+  booking_date: string;
+  booking_time: string;
+  status: 'pending' | 'confirmed' | 'completed' | 'cancelled';
+  total_price: number;
+}
 
 const BookingsManager = () => {
   const { user } = useAuth();
-  const [bookings, setBookings] = useState<any[]>([]);
+  const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
 
+  useEffect(() => {
+    if (user?.id) fetchBookings();
+  }, [user, filter]);
+
   const fetchBookings = async () => {
-    if (!user) return;
-    setLoading(true);
-    let query = supabase
-      .from('bookings')
-      .select(`
-        *,
-        services (name, price)
-      `)
-      .eq('merchant_id', user.id)
-      .order('start_time', { ascending: true });
+    try {
+      setLoading(true);
+      let query = supabase
+        .from('bookings')
+        .select(`
+          id, 
+          customer_name, 
+          customer_phone, 
+          booking_date, 
+          booking_time, 
+          status, 
+          total_price,
+          services (name)
+        `)
+        .eq('merchant_id', user?.id)
+        .order('booking_date', { ascending: true });
 
-    if (filter !== 'all') {
-      query = query.eq('status', filter);
+      if (filter !== 'all') {
+        query = query.eq('status', filter);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+
+      const formattedData = data.map((b: any) => ({
+        ...b,
+        service_name: b.services?.name || 'Unspecified Service'
+      }));
+
+      setBookings(formattedData);
+    } catch (err) {
+      console.error("Error fetching bookings:", err);
+    } finally {
+      setLoading(false);
     }
-
-    const { data } = await query;
-    setBookings(data || []);
-    setLoading(false);
   };
 
-  useEffect(() => { fetchBookings(); }, [user, filter]);
+  const updateStatus = async (id: string, newStatus: string) => {
+    try {
+      const { error } = await supabase
+        .from('bookings')
+        .update({ status: newStatus })
+        .eq('id', id);
 
-  const updateStatus = async (bookingId: string, newStatus: string, customerId: string) => {
-    const { error: updateError } = await supabase
-      .from('bookings')
-      .update({ status: newStatus })
-      .eq('id', bookingId);
-    
-    if (updateError) return;
-
-    if (newStatus === 'completed' && customerId) {
-      const { data: loyaltyCard } = await supabase
-        .from('loyalty_cards')
-        .select('*')
-        .eq('customer_id', customerId)
-        .eq('merchant_id', user?.id)
-        .single();
-
-      if (loyaltyCard) {
-        await supabase
-          .from('loyalty_cards')
-          .update({ stamps_count: loyaltyCard.stamps_count + 1, last_updated: new Date() })
-          .eq('id', loyaltyCard.id);
-      } else {
-        await supabase
-          .from('loyalty_cards')
-          .insert([{ 
-            customer_id: customerId, 
-            merchant_id: user?.id, 
-            stamps_count: 1,
-            target_stamps: 6 
-          }]);
-      }
+      if (error) throw error;
+      fetchBookings(); 
+    } catch (err: any) {
+      alert("Status update failed: " + err.message);
     }
-    fetchBookings();
+  };
+
+  const getStatusStyle = (status: string) => {
+    switch (status) {
+      case 'confirmed': return 'bg-emerald-50 text-emerald-600 border-emerald-100';
+      case 'pending': return 'bg-amber-50 text-amber-600 border-amber-100';
+      case 'cancelled': return 'bg-rose-50 text-rose-600 border-rose-100';
+      case 'completed': return 'bg-blue-50 text-blue-600 border-blue-100';
+      default: return 'bg-gray-50 text-gray-600 border-gray-100';
+    }
   };
 
   return (
-    <div className="animate-in fade-in slide-in-from-bottom-6 duration-700">
-      
-      {/* Header Section */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end mb-12 gap-8">
+    <div className="space-y-8 animate-in fade-in duration-700" dir="ltr">
+      {/* Header & Filter Bar */}
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 bg-white p-8 rounded-[2.5rem] border border-gray-50 shadow-sm">
         <div>
-          <h2 className="text-4xl font-black dark:text-white tracking-tight mb-2">Appointments</h2>
-          <p className="text-gray-400 font-bold flex items-center gap-2">
-            <span className="w-2 h-2 bg-purple-500 rounded-full animate-pulse"></span>
-            You have {bookings.length} total bookings in this category
-          </p>
+          <h2 className="text-3xl font-black text-gray-900 tracking-tighter italic">Appointment Manager</h2>
+          <p className="text-gray-400 font-bold text-[10px] uppercase tracking-[0.2em] mt-1">Real-time scheduling & customer flow</p>
         </div>
-
-        {/* Modern Filter Tabs */}
-        <div className="flex bg-gray-100/50 dark:bg-gray-900/50 p-2 rounded-[2rem] border border-gray-100 dark:border-gray-800 backdrop-blur-sm overflow-x-auto max-w-full">
-          {['all', 'confirmed', 'pending', 'completed', 'cancelled'].map((f) => (
+        
+        <div className="flex flex-wrap bg-gray-50 p-1.5 rounded-2xl border border-gray-100">
+          {['all', 'pending', 'confirmed', 'completed'].map((f) => (
             <button
               key={f}
               onClick={() => setFilter(f)}
-              className={`px-6 py-3 rounded-[1.5rem] text-xs font-black transition-all uppercase tracking-[0.15em] whitespace-nowrap ${
-                filter === f 
-                ? 'bg-white dark:bg-gray-800 text-purple-600 shadow-xl shadow-purple-500/10 scale-105' 
-                : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-200'
+              className={`px-5 py-2.5 rounded-xl font-black text-[10px] transition-all uppercase tracking-widest ${
+                filter === f ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'
               }`}
             >
               {f}
@@ -108,98 +114,101 @@ const BookingsManager = () => {
         </div>
       </div>
 
-      {loading ? (
-        <div className="flex flex-col items-center justify-center py-32 space-y-4">
-           <div className="w-12 h-12 border-4 border-purple-600 border-t-transparent rounded-full animate-spin"></div>
-           <p className="text-gray-400 font-black uppercase tracking-widest text-sm">Syncing your schedule...</p>
-        </div>
-      ) : (
-        <div className="grid gap-6">
-          {bookings.length === 0 ? (
-            <div className="bg-white dark:bg-gray-900 p-24 rounded-[4rem] text-center border-2 border-dashed border-gray-100 dark:border-gray-800 shadow-sm">
-               <div className="w-24 h-24 bg-gray-50 dark:bg-gray-800 rounded-[2rem] flex items-center justify-center mx-auto mb-6">
-                  <CalendarIcon size={40} className="text-gray-200" />
-               </div>
-               <h3 className="text-2xl font-black dark:text-white mb-2 uppercase italic">All Clear!</h3>
-               <p className="text-gray-400 font-bold">No appointments match your current filter.</p>
-            </div>
-          ) : (
-            bookings.map((booking) => (
-              <div 
-                key={booking.id} 
-                className="bg-white dark:bg-gray-900 p-8 rounded-[3rem] border border-gray-50 dark:border-gray-800 flex flex-col xl:flex-row justify-between items-center gap-8 group hover:shadow-[0_30px_60px_-15px_rgba(124,58,237,0.1)] transition-all duration-500 hover:-translate-y-1"
-              >
+      {/* Bookings Feed */}
+      <div className="grid grid-cols-1 gap-4">
+        {loading ? (
+          <div className="py-24 text-center flex flex-col items-center gap-4">
+            <Loader2 className="animate-spin text-indigo-600" size={32} />
+            <p className="text-[10px] font-black text-gray-300 uppercase tracking-[0.3em]">Syncing Calendar...</p>
+          </div>
+        ) : bookings.length === 0 ? (
+          <div className="bg-gray-50 rounded-[3rem] p-24 text-center border-2 border-dashed border-gray-100">
+             <Calendar size={64} className="mx-auto text-gray-200 mb-6" />
+             <h3 className="text-xl font-black text-gray-900">No bookings found</h3>
+             <p className="text-gray-400 font-bold mt-2 text-sm max-w-xs mx-auto">When clients book through your profile, their appointments will appear here.</p>
+          </div>
+        ) : (
+          bookings.map((booking) => (
+            <div key={booking.id} className="bg-white p-6 md:p-8 rounded-[2.5rem] border border-gray-50 shadow-sm hover:shadow-2xl hover:-translate-y-1 transition-all group relative overflow-hidden">
+              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-8">
                 
-                {/* Left: Date & Main Info */}
-                <div className="flex items-center gap-8 w-full xl:w-auto">
-                  <div className="relative group">
-                    <div className="bg-gradient-to-b from-purple-50 to-white dark:from-purple-900/20 dark:to-gray-900 p-6 rounded-[2.5rem] text-center min-w-[100px] border border-purple-100 dark:border-purple-900/30 transition-transform group-hover:scale-105">
-                      <span className="block text-xs font-black text-purple-400 uppercase mb-1">{format(new Date(booking.start_time), 'MMM')}</span>
-                      <span className="block text-3xl font-black text-purple-600">{format(new Date(booking.start_time), 'dd')}</span>
-                    </div>
-                    {booking.status === 'completed' && (
-                      <div className="absolute -top-2 -right-2 bg-emerald-500 text-white p-1.5 rounded-full shadow-lg">
-                        <Award size={14} />
-                      </div>
-                    )}
+                {/* Identity Section */}
+                <div className="flex items-center gap-6 flex-1">
+                  <div className={`w-16 h-16 rounded-2xl flex items-center justify-center shrink-0 border-2 transition-transform group-hover:rotate-3 ${getStatusStyle(booking.status)}`}>
+                    <User size={28} />
                   </div>
-
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-3">
-                       <h4 className="font-black text-2xl dark:text-white uppercase tracking-tighter">{booking.services?.name}</h4>
-                       <span className="text-purple-600 font-black text-sm bg-purple-50 px-3 py-1 rounded-lg">${booking.services?.price}</span>
-                    </div>
-                    <div className="flex flex-wrap items-center gap-6">
-                      <span className="flex items-center gap-2 text-sm font-bold text-gray-400 bg-gray-50 dark:bg-gray-800/50 px-3 py-1.5 rounded-xl">
-                        <Clock size={16} className="text-purple-400"/> {format(new Date(booking.start_time), 'hh:mm a')}
+                  <div>
+                    <h3 className="text-xl font-black text-gray-900 mb-1">{booking.customer_name}</h3>
+                    <div className="flex flex-wrap gap-2">
+                      <span className="flex items-center gap-1.5 text-indigo-600 font-black text-[9px] uppercase bg-indigo-50 px-3 py-1.5 rounded-lg">
+                        <Scissors size={12} strokeWidth={3} /> {booking.service_name}
                       </span>
-                      <span className="flex items-center gap-2 text-sm font-bold text-gray-400 bg-gray-50 dark:bg-gray-800/50 px-3 py-1.5 rounded-xl">
-                        <User size={16} className="text-purple-400"/> {booking.customer_name || 'Guest Customer'}
+                      <span className="flex items-center gap-1.5 text-gray-400 font-bold text-[9px] uppercase bg-gray-50 px-3 py-1.5 rounded-lg">
+                        <Phone size={12} /> {booking.customer_phone}
                       </span>
                     </div>
                   </div>
                 </div>
 
-                {/* Right: Status & Actions */}
-                <div className="flex flex-col sm:flex-row items-center gap-6 w-full xl:w-auto border-t xl:border-none pt-8 xl:pt-0">
-                  
-                  <div className={`px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] shadow-sm ${
-                    booking.status === 'confirmed' ? 'bg-emerald-50 text-emerald-600' :
-                    booking.status === 'completed' ? 'bg-blue-50 text-blue-600' :
-                    booking.status === 'cancelled' ? 'bg-red-50 text-red-600' : 'bg-gray-50 text-gray-400'
-                  }`}>
+                {/* Scheduling Details */}
+                <div className="flex items-center gap-10 px-0 lg:px-10 lg:border-x border-gray-50">
+                  <div className="text-left min-w-[100px]">
+                    <p className="text-[9px] font-black text-gray-300 uppercase tracking-widest mb-1">Date</p>
+                    <p className="font-black text-gray-900 text-sm">{booking.booking_date}</p>
+                  </div>
+                  <div className="text-left min-w-[100px]">
+                    <p className="text-[9px] font-black text-gray-300 uppercase tracking-widest mb-1">Time Slot</p>
+                    <div className="flex items-center gap-1.5 font-black text-indigo-600 bg-indigo-50/50 px-3 py-1 rounded-lg text-sm w-fit">
+                      <Clock size={14} /> {booking.booking_time}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Management Actions */}
+                <div className="flex items-center gap-3">
+                  {booking.status === 'pending' && (
+                    <>
+                      <button 
+                        onClick={() => updateStatus(booking.id, 'confirmed')}
+                        className="p-4 bg-emerald-500 text-white rounded-2xl font-black shadow-lg shadow-emerald-100 hover:bg-emerald-600 transition-all active:scale-90"
+                        title="Confirm Booking"
+                      >
+                        <CheckCircle2 size={20} />
+                      </button>
+                      <button 
+                        onClick={() => updateStatus(booking.id, 'cancelled')}
+                        className="p-4 bg-gray-50 text-gray-400 rounded-2xl font-black hover:bg-rose-50 hover:text-rose-500 transition-all"
+                        title="Cancel Booking"
+                      >
+                        <XCircle size={20} />
+                      </button>
+                    </>
+                  )}
+                  {booking.status === 'confirmed' && (
+                    <button 
+                      onClick={() => updateStatus(booking.id, 'completed')}
+                      className="px-8 py-4 bg-indigo-600 text-white rounded-2xl font-black shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all active:scale-95 text-xs uppercase tracking-widest"
+                    >
+                      Complete Session
+                    </button>
+                  )}
+                  <div className={`px-6 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest border-2 ${getStatusStyle(booking.status)}`}>
                     {booking.status}
                   </div>
-
-                  <div className="flex gap-3">
-                    {booking.status === 'confirmed' && (
-                      <button 
-                        onClick={() => updateStatus(booking.id, 'completed', booking.customer_id)}
-                        className="flex items-center gap-2 px-6 py-4 bg-emerald-500 text-white rounded-[1.5rem] font-black text-xs uppercase tracking-widest hover:bg-emerald-600 hover:shadow-lg hover:shadow-emerald-200 transition-all active:scale-95"
-                      >
-                        <CheckCircle size={18} /> Complete
-                      </button>
-                    )}
-                    
-                    {['pending', 'confirmed'].includes(booking.status) && (
-                      <button 
-                        onClick={() => updateStatus(booking.id, 'cancelled', booking.customer_id)}
-                        className="p-4 bg-gray-50 dark:bg-gray-800 text-gray-400 hover:bg-red-50 hover:text-red-500 rounded-[1.5rem] transition-all"
-                      >
-                        <XCircle size={22} />
-                      </button>
-                    )}
-                    
-                    <button className="p-4 bg-gray-50 dark:bg-gray-800 text-gray-400 hover:bg-purple-50 hover:text-purple-600 rounded-[1.5rem] transition-all">
-                      <ChevronRight size={22} />
-                    </button>
-                  </div>
                 </div>
+
               </div>
-            ))
-          )}
-        </div>
-      )}
+              
+              {/* Vertical Status Accent */}
+              <div className={`absolute top-0 left-0 w-1.5 h-full ${
+                booking.status === 'confirmed' ? 'bg-emerald-400' : 
+                booking.status === 'pending' ? 'bg-amber-400' : 
+                booking.status === 'completed' ? 'bg-blue-400' : 'bg-rose-400'
+              }`}></div>
+            </div>
+          ))
+        )}
+      </div>
     </div>
   );
 };

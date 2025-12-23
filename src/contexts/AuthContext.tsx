@@ -2,14 +2,39 @@ import { createContext, useContext, useEffect, useState, ReactNode } from "react
 import { supabase } from "../lib/supabaseClient";
 import { User as SupabaseUser } from "@supabase/auth-js";
 
-// تعريف شكل بيانات المستخدم في قاعدة البيانات
+// 1. العملات المدعومة
+export const SUPPORTED_CURRENCIES = [
+  { code: 'SAR', symbol: 'ر.س', label: 'Saudi Riyal' },
+  { code: 'EGP', symbol: 'ج.م', label: 'Egyptian Pound' },
+  { code: 'AED', symbol: 'د.إ', label: 'UAE Dirham' },
+  { code: 'USD', symbol: '$', label: 'US Dollar' }
+];
+
+// 2. الواجهة المتوافقة تماماً مع جداول الداتابيز الجديدة
 export interface DBUser {
   id: string;
   email: string;
   full_name?: string;
   role: "admin" | "merchant" | "customer";
+  
+  // بيانات المتجر (Merchant Only)
+  store_name?: string;
   store_slug?: string;
+  brand_color?: string;
+  
+  // بيانات الموقع والاتصال
+  phone?: string;
+  country?: string;
+  region?: string;
+  
+  // نظام الولاء والمالية
+  loyalty_points?: number;
+  currency?: 'SAR' | 'EGP' | 'AED' | 'USD';
+  
+  // حالة النظام
+  setup_complete?: boolean;
   created_at?: string;
+  theme_preference?: string;
 }
 
 interface AuthContextType {
@@ -17,10 +42,12 @@ interface AuthContextType {
   dbUser: DBUser | null;
   role: "admin" | "merchant" | "customer" | null;
   loading: boolean;
+  // تحديث دالة signUp لتقبل الكائن الكامل
   signUp: (email: string, password: string, role: string, metadata: any) => Promise<{ error?: string; data?: any }>;
   signIn: (email: string, password: string) => Promise<{ error?: string; data?: any }>;
   signOut: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  updateProfile: (updates: Partial<DBUser>) => Promise<{ error?: string; success?: boolean }>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -31,7 +58,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [role, setRole] = useState<"admin" | "merchant" | "customer" | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // وظيفة جلب بيانات المستخدم من جدول public.users
+  // جلب بيانات المستخدم من جدول public.users
   const fetchDBUser = async (userId: string) => {
     try {
       const { data, error } = await supabase
@@ -44,69 +71,69 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
       if (data) {
         setDbUser(data as DBUser);
-        setRole(data.role);
+        setRole(data.role as any);
         return data;
       }
     } catch (err) {
-      console.error("Critical error fetching profile from DB:", err);
+      console.error("Fetch DB Error:", err);
     }
     return null;
   };
 
-  // وظيفة تحديث البيانات يدوياً
   const refreshUser = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) {
+      setUser(session.user);
+      await fetchDBUser(session.user.id);
+    }
+  };
+
+  const updateProfile = async (updates: Partial<DBUser>) => {
+    if (!user) return { error: "No user" };
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session?.user) {
-        setUser(session.user);
-        setRole(session.user.user_metadata?.role || null);
-        await fetchDBUser(session.user.id);
+      const { error } = await supabase
+        .from("users")
+        .update(updates)
+        .eq("id", user.id);
+
+      if (error) throw error;
+
+      // تحديث ميتاداتا الـ Auth أيضاً لضمان التزامن
+      if (updates.setup_complete !== undefined) {
+        await supabase.auth.updateUser({ 
+            data: { 
+                setup_complete: updates.setup_complete,
+                store_name: updates.store_name 
+            } 
+        });
       }
-    } catch (err) {
-      console.error("Refresh User Error:", err);
+
+      setDbUser(prev => prev ? { ...prev, ...updates } : null);
+      return { success: true };
+    } catch (err: any) {
+      return { error: err.message };
     }
   };
 
   useEffect(() => {
-    // مؤقت أمان: إذا استغرق التحميل أكثر من 3 ثوانٍ، افتح التطبيق بأي حال
-    const safetyTimer = setTimeout(() => {
-      if (loading) {
-        console.warn("Auth initialization timed out. Forcing loading to false.");
-        setLoading(false);
-      }
-    }, 3500);
-
     const initializeAuth = async () => {
       try {
-        setLoading(true);
         const { data: { session } } = await supabase.auth.getSession();
-        const authUser = session?.user || null;
-        
-        setUser(authUser);
-        if (authUser) {
-          // تحديث الرتبة فوراً من الميتاداتا لسرعة التوجيه
-          setRole(authUser.user_metadata?.role || null);
-          // ثم جلب البيانات الكاملة من القاعدة
-          await fetchDBUser(authUser.id);
+        if (session?.user) {
+          setUser(session.user);
+          await fetchDBUser(session.user.id);
         }
-      } catch (err) {
-        console.error("Initialization Error:", err);
       } finally {
         setLoading(false);
-        clearTimeout(safetyTimer);
       }
     };
 
     initializeAuth();
 
-    // مراقبة تغييرات حالة تسجيل الدخول
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log("Auth Event:", event);
       const authUser = session?.user || null;
       setUser(authUser);
-
       if (authUser) {
-        setRole(authUser.user_metadata?.role || null);
         await fetchDBUser(authUser.id);
       } else {
         setDbUser(null);
@@ -115,43 +142,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setLoading(false);
     });
 
-    return () => {
-      authListener.subscription.unsubscribe();
-      clearTimeout(safetyTimer);
-    };
+    return () => authListener.subscription.unsubscribe();
   }, []);
 
+  // تحديث دالة signUp لتقبل كافة بيانات التسجيل (الهاتف، الدولة، إلخ)
   const signUp = async (email: string, password: string, role: string, metadata: any) => {
     try {
-      const { data, error: authError } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          data: {
-            role: role,
-            full_name: metadata.full_name,
+          data: { 
+            ...metadata, 
+            role,
+            setup_complete: false 
           }
         }
       });
-
-      if (authError) return { error: authError.message };
-
-      if (data.user) {
-        // إنشاء سجل في جدول المستخدمين
-        const { error: dbError } = await supabase.from("users").insert({
-          id: data.user.id,
-          email: email,
-          role: role,
-          full_name: metadata.full_name || '',
-          store_slug: metadata.store_slug || null
-        });
-
-        if (dbError) console.warn("Sync delay (DB Insert):", dbError.message);
-      }
-
-      return { data };
+      return { data, error: error?.message };
     } catch (err: any) {
-      return { error: err.message || "System error during signup" };
+      return { error: err.message };
     }
   };
 
@@ -159,41 +169,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
       setLoading(true);
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      
-      if (error) {
-        setLoading(false);
-        return { error: error.message };
-      }
-
-      if (data.user) {
-        setRole(data.user.user_metadata?.role || null);
-        await fetchDBUser(data.user.id);
-      }
-      
-      setLoading(false);
+      if (error) throw error;
       return { data };
     } catch (err: any) {
-      setLoading(false);
-      return { error: "Login failed unexpectedy" };
-    }
-  };
-
-  const signOut = async () => {
-    try {
-      setLoading(true);
-      await supabase.auth.signOut();
-      setUser(null);
-      setDbUser(null);
-      setRole(null);
-    } catch (err) {
-      console.error("Signout Error:", err);
+      return { error: err.message };
     } finally {
       setLoading(false);
     }
   };
 
+  const signOut = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+    setDbUser(null);
+    setRole(null);
+  };
+
   return (
-    <AuthContext.Provider value={{ user, dbUser, role, loading, signUp, signIn, signOut, refreshUser }}>
+    <AuthContext.Provider value={{ user, dbUser, role, loading, signUp, signIn, signOut, refreshUser, updateProfile }}>
       {children}
     </AuthContext.Provider>
   );
@@ -204,5 +197,10 @@ export const useAuth = () => {
   if (!context) throw new Error("useAuth must be used inside AuthProvider");
   return context;
 };
+// 3. دالة مساعدة للحصول على رمز العملة
+export const getCurrencySymbol = (code: string) => {
+  const currency = SUPPORTED_CURRENCIES.find(c => c.code === code);
+  return currency ? currency.symbol : '';
+};  
 
-export default AuthProvider;
+export default AuthContext;

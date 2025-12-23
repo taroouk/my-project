@@ -1,169 +1,160 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../../../../lib/supabaseClient';
 import { useAuth } from '../../../../contexts/AuthContext';
-import { Plus, Package, Trash2, Edit3, Search, Loader2, X, Upload, ImageIcon } from 'lucide-react';
-
-interface Product {
-  id: string;
-  name: string;
-  price: number;
-  stock: number;
-  category: string;
-  description: string;
-  image_url: string;
-}
+import { 
+  Package, Plus, Search, Trash2, Edit3, 
+  Tag, BarChart3, Loader2, ShoppingCart, 
+  AlertTriangle, ArrowUpRight 
+} from 'lucide-react';
 
 const ProductList = () => {
   const { user } = useAuth();
-  const [products, setProducts] = useState<Product[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isUploading, setIsUploading] = useState(false);
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [formData, setFormData] = useState({ 
-    name: '', price: '', stock: '', category: '', description: '', image_url: '' 
-  });
+
+  useEffect(() => {
+    if (user?.id) fetchProducts();
+  }, [user]);
 
   const fetchProducts = async () => {
-    setLoading(true);
-    const { data } = await supabase.from('products').select('*').eq('merchant_id', user?.id).order('created_at', { ascending: false });
-    if (data) setProducts(data);
-    setLoading(false);
-  };
-
-  useEffect(() => { if (user) fetchProducts(); }, [user]);
-
-  // دالة رفع الصور لـ Supabase Storage
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
     try {
-      setIsUploading(true);
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${Math.random()}.${fileExt}`;
-      const filePath = `products/${user?.id}/${fileName}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('product-images')
-        .upload(filePath, file);
-
-      if (uploadError) throw uploadError;
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('product-images')
-        .getPublicUrl(filePath);
-
-      setFormData({ ...formData, image_url: publicUrl });
-    } catch (error) {
-      alert('Error uploading image!');
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .eq('merchant_id', user?.id)
+        .order('created_at', { ascending: false });
+        
+      if (error) throw error;
+      setProducts(data || []);
+    } catch (err) {
+      console.error("Error fetching products:", err);
     } finally {
-      setIsUploading(false);
+      setLoading(false);
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const payload = {
-      ...formData,
-      price: parseFloat(formData.price),
-      stock: parseInt(formData.stock),
-      merchant_id: user?.id
-    };
-
-    if (editingId) {
-      await supabase.from('products').update(payload).eq('id', editingId);
-    } else {
-      await supabase.from('products').insert([payload]);
-    }
-
-    setIsModalOpen(false);
-    setFormData({ name: '', price: '', stock: '', category: '', description: '', image_url: '' });
-    fetchProducts();
-  };
-
-  const handleDelete = async (id: string) => {
-    if (confirm("Delete this product?")) {
-      await supabase.from('products').delete().eq('id', id);
-      fetchProducts();
-    }
-  };
+  // Calculate quick stats
+  const lowStockItems = products.filter(p => p.stock <= 5 && p.stock > 0).length;
+  const outOfStockItems = products.filter(p => p.stock === 0).length;
 
   return (
-    <div className="animate-in fade-in duration-500 text-left">
-      <div className="flex justify-between items-center mb-10">
+    <div className="space-y-8 animate-in fade-in duration-700" dir="ltr">
+      {/* Header Section */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 bg-white p-8 rounded-[2.5rem] border border-gray-50 shadow-sm">
         <div>
-          <h2 className="text-3xl font-black">Inventory</h2>
-          <p className="text-gray-500">Manage products and stock levels.</p>
+          <h2 className="text-3xl font-black text-gray-900 tracking-tighter italic">Physical Products</h2>
+          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-[0.2em] mt-1">Manage your inventory and direct sales</p>
         </div>
-        <button onClick={() => { setEditingId(null); setIsModalOpen(true); }} className="bg-purple-600 text-white px-6 py-3 rounded-2xl flex items-center gap-2 font-bold shadow-lg shadow-purple-200 hover:bg-purple-700 transition-all">
+        <button className="bg-indigo-600 text-white px-8 py-4 rounded-2xl font-black flex items-center justify-center gap-2 hover:bg-indigo-700 hover:-translate-y-1 transition-all shadow-xl shadow-indigo-100 active:scale-95">
           <Plus size={20} /> Add Product
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {products.map(p => (
-          <div key={p.id} className="bg-white dark:bg-gray-800 p-5 rounded-[2.5rem] border border-gray-100 dark:border-gray-700 group relative">
-            <div className="w-full h-48 bg-gray-50 dark:bg-gray-900 rounded-[2rem] mb-4 overflow-hidden shadow-inner">
-              {p.image_url ? (
-                <img src={p.image_url} className="w-full h-full object-cover group-hover:scale-110 transition-all" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-gray-300"><Package size={40}/></div>
-              )}
+      {/* Inventory Health Bar */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-white p-6 rounded-3xl border border-gray-50 flex items-center gap-4">
+            <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center">
+                <Package size={24} />
             </div>
-            <h4 className="font-bold text-lg mb-1">{p.name}</h4>
-            <p className="text-purple-600 font-black text-xl mb-4">${p.price}</p>
-            <div className="flex justify-between items-center border-t border-gray-50 dark:border-gray-700 pt-4">
-              <span className="text-xs font-bold text-gray-400">Stock: {p.stock}</span>
-              <div className="flex gap-2">
-                <button onClick={() => handleDelete(p.id)} className="p-2 text-red-500 hover:bg-red-50 rounded-xl transition-all"><Trash2 size={16}/></button>
-              </div>
+            <div>
+                <p className="text-[10px] font-black text-gray-400 uppercase">Total SKUs</p>
+                <p className="text-xl font-black text-gray-900">{products.length}</p>
             </div>
-          </div>
-        ))}
+        </div>
+        <div className="bg-white p-6 rounded-3xl border border-gray-50 flex items-center gap-4">
+            <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center">
+                <AlertTriangle size={24} />
+            </div>
+            <div>
+                <p className="text-[10px] font-black text-gray-400 uppercase">Low Stock</p>
+                <p className="text-xl font-black text-amber-600">{lowStockItems} Items</p>
+            </div>
+        </div>
+        <div className="bg-white p-6 rounded-3xl border border-gray-50 flex items-center gap-4">
+            <div className="w-12 h-12 bg-red-50 text-red-600 rounded-2xl flex items-center justify-center">
+                <ShoppingCart size={24} />
+            </div>
+            <div>
+                <p className="text-[10px] font-black text-gray-400 uppercase">Out of Stock</p>
+                <p className="text-xl font-black text-red-600">{outOfStockItems} Items</p>
+            </div>
+        </div>
       </div>
 
-      {/* Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="bg-white dark:bg-gray-900 rounded-[3rem] w-full max-w-2xl p-10 shadow-2xl animate-in zoom-in-95 overflow-y-auto max-h-[90vh]">
-            <div className="flex justify-between items-center mb-8">
-              <h3 className="text-2xl font-black">{editingId ? 'Edit Item' : 'Add New Item'}</h3>
-              <button onClick={() => setIsModalOpen(false)} className="p-2 bg-gray-50 rounded-full"><X size={20}/></button>
-            </div>
-
-            <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-4">
-                <div className="w-full h-64 bg-gray-50 dark:bg-gray-800 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-[2.5rem] relative flex items-center justify-center overflow-hidden">
-                  {formData.image_url ? (
-                    <img src={formData.image_url} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="text-center">
-                      {isUploading ? <Loader2 className="animate-spin text-purple-600 mx-auto" /> : <Upload className="text-gray-300 mx-auto mb-2" />}
-                      <p className="text-xs text-gray-400 font-bold">Upload Product Image</p>
-                    </div>
-                  )}
-                  <input type="file" accept="image/*" onChange={handleImageUpload} className="absolute inset-0 opacity-0 cursor-pointer" />
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <input required placeholder="Product Name" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full p-4 rounded-2xl bg-gray-50 dark:bg-gray-800 border-none outline-none focus:ring-2 focus:ring-purple-500" />
-                <div className="flex gap-4">
-                  <input required type="number" placeholder="Price" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} className="w-1/2 p-4 rounded-2xl bg-gray-50 dark:bg-gray-800 border-none outline-none" />
-                  <input required type="number" placeholder="Stock" value={formData.stock} onChange={e => setFormData({...formData, stock: e.target.value})} className="w-1/2 p-4 rounded-2xl bg-gray-50 dark:bg-gray-800 border-none outline-none" />
-                </div>
-                <input placeholder="Category" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} className="w-full p-4 rounded-2xl bg-gray-50 dark:bg-gray-800 border-none outline-none" />
-                <textarea placeholder="Description" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} className="w-full p-4 rounded-2xl bg-gray-50 dark:bg-gray-800 border-none h-24 outline-none" />
-                <button type="submit" disabled={isUploading} className="w-full bg-purple-600 text-white py-5 rounded-[1.5rem] font-black shadow-xl shadow-purple-100 hover:bg-purple-700 transition-all">
-                  {isUploading ? 'Uploading...' : (editingId ? 'Update Product' : 'Save Product')}
-                </button>
-              </div>
-            </form>
+      {/* Product Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        {loading ? (
+          <div className="col-span-full h-64 flex flex-col items-center justify-center gap-4">
+             <Loader2 className="animate-spin text-indigo-600" size={32} />
+             <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Scanning Warehouse...</p>
           </div>
-        </div>
-      )}
+        ) : products.length === 0 ? (
+          <div className="col-span-full bg-gray-50 rounded-[3rem] p-20 text-center border-2 border-dashed border-gray-100 flex flex-col items-center">
+            <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center text-gray-200 shadow-sm mb-6">
+                <Package size={40} />
+            </div>
+            <h3 className="text-xl font-black text-gray-900 mb-2">No products in stock</h3>
+            <p className="text-gray-400 font-bold mb-8 text-sm max-w-xs">You haven't added any physical items to your inventory yet.</p>
+            <button className="text-indigo-600 font-black underline underline-offset-8 decoration-2 hover:text-indigo-800 transition-colors">Import Catalog</button>
+          </div>
+        ) : (
+          products.map(product => (
+            <div key={product.id} className="bg-white p-5 rounded-[2.5rem] border border-gray-50 shadow-sm hover:shadow-2xl hover:-translate-y-2 transition-all group relative">
+              <div className="absolute top-8 right-8 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+                 <button className="bg-white/90 backdrop-blur-md p-2 rounded-xl text-gray-400 hover:text-red-500 shadow-sm transition-colors">
+                    <Trash2 size={16} />
+                 </button>
+              </div>
+
+              <div className="w-full h-48 bg-gray-50 rounded-[2rem] mb-6 flex items-center justify-center text-gray-200 overflow-hidden relative border border-gray-50">
+                {product.image_url ? (
+                    <img src={product.image_url} alt={product.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+                ) : (
+                    <Package size={48} />
+                )}
+                <div className="absolute bottom-4 left-4">
+                   <span className="bg-white/90 backdrop-blur-md px-3 py-1 rounded-lg text-[9px] font-black text-gray-900 uppercase shadow-sm">
+                      {product.category || 'Standard'}
+                   </span>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex justify-between items-start">
+                    <h3 className="font-black text-gray-900 text-lg tracking-tight truncate flex-1">{product.name}</h3>
+                    <button className="text-gray-300 hover:text-indigo-600 transition-colors ml-2">
+                        <Edit3 size={18} />
+                    </button>
+                </div>
+
+                <div className="flex justify-between items-end pt-2">
+                  <div className="flex flex-col">
+                    <span className="text-[9px] font-black text-gray-300 uppercase tracking-tighter">Retail Price</span>
+                    <span className="text-2xl font-black text-indigo-600 tracking-tighter">
+                        <small className="text-[10px] mr-1">SAR</small>{product.price}
+                    </span>
+                  </div>
+                  
+                  <div className="text-right">
+                    <span className={`text-[9px] font-black px-3 py-1.5 rounded-xl border ${
+                        product.stock > 10 ? 'bg-green-50 text-green-600 border-green-100' : 
+                        product.stock > 0 ? 'bg-amber-50 text-amber-600 border-amber-100' : 
+                        'bg-red-50 text-red-600 border-red-100'
+                    }`}>
+                        {product.stock === 0 ? 'Out of Stock' : `Stock: ${product.stock}`}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <button className="w-full mt-6 py-3 bg-gray-50 text-gray-400 group-hover:bg-indigo-600 group-hover:text-white rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all flex items-center justify-center gap-2">
+                Quick Edit <ArrowUpRight size={14} />
+              </button>
+            </div>
+          ))
+        )}
+      </div>
     </div>
   );
 };

@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
 
+// CONTEXTS
 import { useAuth } from './contexts/AuthContext';
 import { useTheme } from './contexts/ThemeContext';
 
@@ -8,7 +9,6 @@ import { useTheme } from './contexts/ThemeContext';
 import Signup from './pages/Signup';
 import LandingPage from './components/LandingPage';
 import StoreFront from './pages/store/StoreFront'; 
-import DynamicStore from './pages/store/DynamicStore';
 import SetupStore from './pages/dashboard/merchant/setup'; 
 import AdminLogin from './pages/admin/AdminLogin';
 import MerchantLogin from './pages/auth/MerchantLogin';
@@ -22,90 +22,88 @@ import RequireAdmin from './routes/RequireAdmin';
 import RoleGuard from './routes/RoleGuard';
 
 function App() {
-  const { user, role, loading } = useAuth();
+  const { user, dbUser, role, loading } = useAuth();
   const { isDarkMode } = useTheme();
   const navigate = useNavigate();
   const [language, setLanguage] = useState<'ar' | 'en'>('en');
 
-  // ==========================================
-  // 1. شاشة التحميل (Loading State)
-  // ==========================================
+  // --- Optimized Setup Check Logic ---
+  const isSetupComplete = () => {
+    // 1. Check Metadata (Fastest & Ignores RLS issues)
+    const metadataComplete = user?.user_metadata?.setup_complete === true;
+    
+    // 2. Check Database record
+    const dbComplete = dbUser?.setup_complete === true || !!dbUser?.store_slug;
+    
+    // 3. Check Session Persistence
+    const sessionComplete = localStorage.getItem('servly_setup_done') === 'true';
+
+    return metadataComplete || dbComplete || sessionComplete;
+  };
+
+
+
+
+  // Professional Loading Screen
   if (loading) {
     return (
       <div className={`h-screen flex items-center justify-center ${isDarkMode ? 'bg-[#030712] text-white' : 'bg-gray-50 text-black'}`}>
         <div className="text-center">
-          <div className="animate-spin text-5xl mb-4 text-purple-600">🌀</div>
-          <p className="text-lg font-black uppercase tracking-widest animate-pulse">Servly is Synchronizing...</p>
-          <button 
-            onClick={() => window.location.reload()}
-            className="mt-6 text-xs text-gray-500 underline block mx-auto"
-          >
-            Force Refresh
-          </button>
+          <div className="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-sm font-black uppercase tracking-[0.3em] animate-pulse text-indigo-600">Servly</p>
+          <p className="text-[10px] text-gray-400 mt-2 font-bold uppercase tracking-widest">Synchronizing Workspace...</p>
         </div>
       </div>
     ); 
   }
 
-  // ==========================================
-  // 2. منطق التوجيه الذكي (The Brain)
-  // ==========================================
+  // --- Smart Home Page Redirect Logic ---
   const HomePageRedirect = () => {
-    if (!user) return <Navigate to="/landing" replace />;
+    if (!user) {
+      return (
+        <LandingPage 
+          language={language} 
+          setLanguage={setLanguage}
+          onGetStarted={() => navigate('/signup')}
+          onCustomerLogin={() => navigate('/login/customer')}
+          onMerchantLogin={() => navigate('/login/merchant')}
+        />
+      );
+    }
     
-    // الأولوية للرول القادم من الداتا بيز ثم الميتاداتا
-    const activeRole = role || user.user_metadata?.role;
+    const activeRole = role || dbUser?.role || user.user_metadata?.role;
 
     if (activeRole === 'admin') return <Navigate to="/admin" replace />;
     
     if (activeRole === 'merchant') {
-      const hasCompletedSetup = user.user_metadata?.setup_complete || !!user.user_metadata?.store_slug;
-      if (!hasCompletedSetup) {
-        return <Navigate to="/merchant/setup" replace />;
-      }
-      return <Navigate to="/merchant" replace />;
+      return isSetupComplete() ? <Navigate to="/merchant" replace /> : <Navigate to="/merchant/setup" replace />;
     }
     
     if (activeRole === 'customer') return <Navigate to="/dashboard/customer" replace />;
     
-    return <Navigate to="/landing" replace />;
+    return <Navigate to="/unauthorized" replace />;
   };
 
   return (
     <div className={isDarkMode ? 'dark' : ''}>
       <Routes>
-        {/* الصفحة الرئيسية توجه المستخدم حسب دوره */}
+        {/* Public Routes */}
         <Route path="/" element={<HomePageRedirect />} />
-
-        {/* المسارات العامة */}
-        <Route 
-          path="/landing" 
-          element={
-            <LandingPage 
-              language={language} 
-              setLanguage={setLanguage}
-              onGetStarted={() => navigate('/signup')}
-              onCustomerLogin={() => navigate('/login/customer')}
-              onMerchantLogin={() => navigate('/login/merchant')}
-            />
-          } 
-        />
-
-        <Route path="/store" element={<StoreFront />} />
-        <Route path="/store/:slug" element={<DynamicStore />} />
-
-        {/* صفحات تسجيل الدخول */}
+        <Route path="/s/:slug" element={<StoreFront />} />
         <Route path="/signup" element={<Signup />} />
+        
+        {/* Auth Routes */}
         <Route path="/login/admin" element={<AdminLogin />} />
         <Route path="/login/merchant" element={<MerchantLogin />} />
         <Route path="/login/customer" element={<CustomerLogin />} />
 
-        {/* مسارات التاجر (Merchant) */}
+        {/* --- Merchant Section --- */}
         <Route
           path="/merchant/setup"
           element={
             <RoleGuard allowedRoles={['merchant', 'admin']}>
-              <SetupStore />
+              {/* Force redirect if already done */}
+              {isSetupComplete() ? <Navigate to="/merchant" replace /> : <SetupStore />}
             </RoleGuard>
           }
         />
@@ -114,12 +112,13 @@ function App() {
           path="/merchant/*"
           element={
             <RoleGuard allowedRoles={['merchant', 'admin']}>
-              <MerchantDashboard />
+              {/* Force back to setup if not finished */}
+              {isSetupComplete() ? <MerchantDashboard /> : <Navigate to="/merchant/setup" replace />}
             </RoleGuard>
           }
         />
 
-        {/* مسارات الأدمن (Admin) */}
+        {/* --- Admin Section --- */}
         <Route
           path="/admin/*"
           element={
@@ -129,7 +128,7 @@ function App() {
           }
         />
 
-        {/* مسارات العميل (Customer) */}
+        {/* --- Customer Section --- */}
         <Route
           path="/dashboard/customer/*"
           element={
@@ -139,26 +138,21 @@ function App() {
           }
         />
 
-        {/* صفحة منع الدخول */}
+        {/* Access Denied Page */}
         <Route path="/unauthorized" element={
-          <div className="h-screen flex flex-col items-center justify-center bg-gray-50 dark:bg-gray-950 text-center px-6 transition-colors">
-            <h1 className="text-9xl font-black text-red-500 opacity-10 mb-4 absolute">403</h1>
-            <div className="relative z-10">
-              <h2 className="text-4xl font-black mb-2 dark:text-white">ACCESS DENIED</h2>
-              <p className="text-gray-500 max-w-sm mx-auto mb-8 font-bold">
-                Your role "{role || user?.user_metadata?.role || 'Guest'}" doesn't have permissions here.
-              </p>
-              <button 
-                onClick={() => navigate('/')} 
-                className="bg-purple-600 text-white px-10 py-4 rounded-2xl font-black shadow-xl hover:bg-purple-700 transition-all active:scale-95"
-              >
-                RETURN HOME
-              </button>
-            </div>
+          <div className="h-screen flex flex-col items-center justify-center bg-white text-center px-6" dir="ltr">
+            <div className="w-24 h-24 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mb-6 text-4xl font-bold italic shadow-inner">!</div>
+            <h2 className="text-4xl font-black mb-2 uppercase tracking-tighter text-gray-900 italic">Access Denied</h2>
+            <p className="text-gray-500 mb-8 font-bold max-w-sm">Your account doesn't have the necessary permissions to view this dashboard.</p>
+            <button 
+              onClick={() => navigate('/')} 
+              className="bg-black text-white px-12 py-5 rounded-2xl font-black shadow-2xl hover:bg-gray-800 transition-all uppercase tracking-widest text-xs"
+            >
+              Back to Home
+            </button>
           </div>
         } />
         
-        {/* أي مسار غير موجود يرجع للرئيسية */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </div>

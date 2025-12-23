@@ -1,38 +1,33 @@
 import { ReactNode } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
-interface Props { children: ReactNode; }
-
-const RequireAdmin = ({ children }: Props) => {
+const RequireAdmin = ({ children }: { children: ReactNode }) => {
   const { user, role, loading } = useAuth();
+  const location = useLocation();
 
-  if (loading) return (
-    <div className="h-screen flex items-center justify-center bg-gray-50">
-      <p className="font-black animate-pulse text-purple-600">VERIFYING ADMIN ACCESS...</p>
-    </div>
-  );
-  
-  // فحص الرتبة من مصدرين لضمان الدخول
-  const currentRole = role || user?.user_metadata?.role;
-
-  if (!user) return <Navigate to="/login/admin" replace />;
-
-  if (currentRole !== 'admin') {
+  // 1. حالة التحميل: ننتظر حتى نتأكد من هوية المستخدم
+  if (loading) {
     return (
-      <div className="h-screen flex flex-col items-center justify-center text-center p-10">
-        <h1 className="text-4xl font-black text-red-600 mb-4">ACCESS DENIED</h1>
-        <p className="text-gray-500 mb-6">Current Role: <span className="text-black font-bold">{currentRole || 'Guest'}</span></p>
-        <button 
-          onClick={() => window.location.href='/landing'}
-          className="bg-black text-white px-8 py-3 rounded-xl font-bold"
-        >
-          Return Home
-        </button>
+      <div className="h-screen flex items-center justify-center bg-white dark:bg-[#030712]">
+        <div className="flex flex-col items-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-600 mb-4"></div>
+          <p className="text-sm font-bold text-gray-500 animate-pulse">VERIFYING ADMIN PRIVILEGES...</p>
+        </div>
       </div>
     );
   }
 
+  // 2. التحقق من الدور (Role): نقرأ من الـ State أو من ميتاداتا المستخدم مباشرة
+  const currentRole = role || user?.user_metadata?.role;
+
+  // 3. إذا لم يكن مسجلاً أو ليس أدمن، يتم تحويله لصفحة تسجيل دخول الأدمن
+  if (!user || currentRole !== 'admin') {
+    console.warn("Access Denied: User is not an admin", { role: currentRole });
+    return <Navigate to="/login/admin" state={{ from: location }} replace />;
+  }
+
+  // 4. إذا كان أدمن، يتم السماح له بالدخول
   return <>{children}</>;
 };
 

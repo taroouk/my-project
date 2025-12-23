@@ -1,20 +1,19 @@
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../../../../lib/supabaseClient';
 import { useAuth } from '../../../../contexts/AuthContext';
 import { 
-  Users, 
-  TrendingUp, 
-  ShoppingBag, 
-  DollarSign, 
-  Award, 
-  ArrowUpRight,
-  Search
+  Users, Search, Mail, Phone, Calendar, 
+  Star, MoreVertical, UserPlus, Filter, Gift,
+  Crown, Loader2, ArrowUpRight
 } from 'lucide-react';
 
 interface Customer {
+  id: string;
   full_name: string;
-  total_spent: number;
-  orders_count: number;
+  email: string;
+  phone: string;
+  total_bookings: number;
+  loyalty_points: number;
   last_visit: string;
 }
 
@@ -25,144 +24,164 @@ const CustomerList = () => {
   const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
-    const fetchCustomers = async () => {
-      if (!user) return;
-      setLoading(true);
-      
-      // جلب المواعيد (Bookings) المرتبطة بهذا التاجر لحساب الإحصائيات
-      const { data, error } = await supabase
-        .from('bookings')
-        .select('customer_name, total_price, start_time')
-        .eq('merchant_id', user.id);
-
-      if (!error && data) {
-        const stats = data.reduce((acc: any, curr) => {
-          const name = curr.customer_name || 'Guest';
-          if (!acc[name]) {
-            acc[name] = { 
-              full_name: name, 
-              total_spent: 0, 
-              orders_count: 0,
-              last_visit: curr.start_time 
-            };
-          }
-          acc[name].total_spent += curr.total_price || 0;
-          acc[name].orders_count += 1;
-          // تحديث تاريخ آخر زيارة إذا كان الموعد أحدث
-          if (new Date(curr.start_time) > new Date(acc[name].last_visit)) {
-            acc[name].last_visit = curr.start_time;
-          }
-          return acc;
-        }, {});
-        
-        // ترتيب العملاء حسب الأكثر إنفاقاً
-        const sortedCustomers = (Object.values(stats) as Customer[])
-          .sort((a, b) => b.total_spent - a.total_spent);
-          
-        setCustomers(sortedCustomers);
-      }
-      setLoading(false);
-    };
-    fetchCustomers();
+    if (user?.id) fetchCustomers();
   }, [user]);
 
+  const fetchCustomers = async () => {
+    try {
+      setLoading(true);
+      // Fetching unique customers from the bookings table
+      const { data, error } = await supabase
+        .from('bookings')
+        .select('customer_name, customer_phone, total_price, created_at')
+        .eq('merchant_id', user?.id);
+
+      if (error) throw error;
+
+      // Grouping logic to create a unique Customer Database (CRM)
+      const uniqueCustomers = data.reduce((acc: any, curr: any) => {
+        if (!acc[curr.customer_phone]) {
+          acc[curr.customer_phone] = {
+            id: Math.random().toString(36).substr(2, 9),
+            full_name: curr.customer_name,
+            phone: curr.customer_phone,
+            total_bookings: 1,
+            loyalty_points: Math.floor(curr.total_price / 10), // Example: 1 point for every 10 SAR
+            last_visit: new Date(curr.created_at).toLocaleDateString('en-US')
+          };
+        } else {
+          acc[curr.customer_phone].total_bookings += 1;
+          acc[curr.customer_phone].loyalty_points += Math.floor(curr.total_price / 10);
+        }
+        return acc;
+      }, {});
+
+      setCustomers(Object.values(uniqueCustomers));
+    } catch (err) {
+      console.error("Error fetching customers:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const filteredCustomers = customers.filter(c => 
-    c.full_name.toLowerCase().includes(searchTerm.toLowerCase())
+    c.full_name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    c.phone.includes(searchTerm)
   );
 
   return (
-    <div className="animate-in fade-in slide-in-from-bottom-6 duration-700">
-      
-      {/* Header & Search */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-end mb-12 gap-8">
+    <div className="space-y-8 animate-in fade-in duration-700" dir="ltr">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 bg-white p-8 rounded-[2.5rem] border border-gray-50 shadow-sm">
         <div>
-          <h2 className="text-4xl font-black dark:text-white tracking-tighter uppercase mb-2">
-            Customer Insights
-          </h2>
-          <p className="text-gray-400 font-bold italic flex items-center gap-2">
-            <TrendingUp size={18} className="text-emerald-500" /> 
-            Tracking {customers.length} unique customers and their habits.
-          </p>
+          <h2 className="text-3xl font-black text-gray-900 tracking-tighter italic">Customer Database (CRM)</h2>
+          <p className="text-gray-400 font-bold text-[10px] uppercase tracking-[0.2em] mt-1">Manage relationships and loyalty programs</p>
         </div>
+        <button className="bg-purple-600 text-white px-8 py-4 rounded-2xl font-black flex items-center gap-2 shadow-xl shadow-purple-100 hover:bg-purple-700 hover:-translate-y-1 transition-all active:scale-95">
+          <UserPlus size={20} /> Add New Customer
+        </button>
+      </div>
 
-        <div className="relative w-full lg:w-96">
-          <Search className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-          <input 
-            type="text"
-            placeholder="Search by name..."
-            className="w-full pl-14 pr-6 py-5 rounded-[2rem] bg-white dark:bg-gray-900 border-none shadow-sm focus:ring-4 focus:ring-purple-500/10 font-bold transition-all"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+      {/* CRM Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="bg-white p-8 rounded-[2rem] border border-gray-50 shadow-sm relative overflow-hidden group">
+           <Users className="absolute -right-4 -top-4 text-purple-50 w-24 h-24 group-hover:scale-110 transition-transform" />
+           <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest relative z-10">Total Clients</p>
+           <h4 className="text-4xl font-black text-purple-600 mt-2 relative z-10">{customers.length}</h4>
+        </div>
+        <div className="bg-white p-8 rounded-[2rem] border border-gray-50 shadow-sm relative overflow-hidden group">
+           <Crown className="absolute -right-4 -top-4 text-amber-50 w-24 h-24 group-hover:scale-110 transition-transform" />
+           <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest relative z-10">VIP Members</p>
+           <h4 className="text-4xl font-black text-amber-500 mt-2 relative z-10">
+             {customers.filter(c => c.total_bookings > 3).length}
+           </h4>
+        </div>
+        <div className="bg-white p-8 rounded-[2rem] border border-gray-50 shadow-sm relative overflow-hidden group">
+           <Gift className="absolute -right-4 -top-4 text-emerald-50 w-24 h-24 group-hover:scale-110 transition-transform" />
+           <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest relative z-10">Loyalty Points Issued</p>
+           <h4 className="text-4xl font-black text-emerald-500 mt-2 relative z-10">
+             {customers.reduce((sum, c) => sum + c.loyalty_points, 0)}
+           </h4>
         </div>
       </div>
 
-      {loading ? (
-        <div className="flex flex-col items-center justify-center py-32 space-y-4">
-           <div className="w-12 h-12 border-4 border-purple-600 border-t-transparent rounded-full animate-spin"></div>
-           <p className="text-gray-400 font-black uppercase tracking-widest text-xs">Analyzing behavior...</p>
+      {/* Main List Section */}
+      <div className="bg-white rounded-[3rem] border border-gray-50 shadow-sm overflow-hidden">
+        <div className="p-8 border-b border-gray-50 flex flex-col md:row gap-6">
+           <div className="flex-1 relative group">
+              <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-purple-600 transition-colors" size={20}/>
+              <input 
+                placeholder="Search by name or mobile number..." 
+                className="w-full pl-14 pr-6 py-4 bg-gray-50/50 rounded-2xl font-bold outline-none focus:ring-4 focus:ring-purple-50 transition-all border border-transparent focus:border-purple-100"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+           </div>
+           <button className="px-8 py-4 bg-white border border-gray-100 rounded-2xl font-black text-gray-500 flex items-center justify-center gap-2 hover:bg-gray-50 transition-all">
+              <Filter size={18}/> Advanced Filters
+           </button>
         </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
-          {filteredCustomers.map((c, i) => (
-            <div key={i} className="bg-white dark:bg-gray-900 p-8 rounded-[3.5rem] border border-gray-50 dark:border-gray-800 shadow-sm hover:shadow-[0_30px_60px_-15px_rgba(0,0,0,0.05)] transition-all duration-500 group relative overflow-hidden">
-              
-              {/* Top Section: Profile */}
-              <div className="flex items-center gap-5 mb-8 relative z-10">
-                <div className="w-16 h-16 rounded-[1.5rem] bg-gradient-to-br from-purple-50 to-purple-100 dark:from-purple-900/20 dark:to-gray-800 text-purple-600 flex items-center justify-center font-black text-2xl shadow-inner group-hover:scale-110 transition-transform">
-                  {c.full_name[0]}
-                </div>
-                <div>
-                  <h4 className="font-black text-xl dark:text-white uppercase tracking-tighter">{c.full_name}</h4>
-                  <div className="flex items-center gap-2">
-                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-md uppercase ${
-                      c.total_spent > 500 ? 'bg-amber-100 text-amber-600' : 'bg-gray-100 text-gray-400'
-                    }`}>
-                      {c.total_spent > 500 ? 'VIP Member' : 'Regular'}
-                    </span>
-                  </div>
-                </div>
-                <button className="ml-auto p-3 bg-gray-50 dark:bg-gray-800 rounded-xl text-gray-300 hover:text-purple-600 transition-colors">
-                  <ArrowUpRight size={20} />
-                </button>
-              </div>
 
-              {/* Stats Grid */}
-              <div className="grid grid-cols-2 gap-4 relative z-10">
-                <div className="bg-gray-50/50 dark:bg-gray-800/50 p-6 rounded-[2rem] border border-gray-100/50 dark:border-gray-700/30">
-                  <div className="flex items-center gap-2 mb-2">
-                    <ShoppingBag size={14} className="text-purple-400" />
-                    <p className="text-[10px] text-gray-400 uppercase font-black tracking-widest">Orders</p>
-                  </div>
-                  <p className="font-black text-3xl dark:text-white tracking-tighter">{c.orders_count}</p>
-                </div>
-
-                <div className="bg-emerald-50/30 dark:bg-emerald-900/10 p-6 rounded-[2rem] border border-emerald-50 dark:border-emerald-900/20">
-                  <div className="flex items-center gap-2 mb-2">
-                    <DollarSign size={14} className="text-emerald-500" />
-                    <p className="text-[10px] text-emerald-600/50 uppercase font-black tracking-widest">Revenue</p>
-                  </div>
-                  <p className="font-black text-3xl text-emerald-600 tracking-tighter leading-none">
-                    <span className="text-sm mr-0.5">$</span>{c.total_spent.toFixed(0)}
-                  </p>
-                </div>
-              </div>
-
-              {/* Bottom Info */}
-              <div className="mt-6 pt-6 border-t border-gray-50 dark:border-gray-800 flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-gray-300">
-                <div className="flex items-center gap-2">
-                   <Award size={14} className={c.orders_count >= 5 ? "text-purple-500" : "text-gray-200"} />
-                   {c.orders_count >= 5 ? "Loyalty Pro" : "Building Loyalty"}
-                </div>
-                <span>Active Client</span>
-              </div>
-
-              {/* Decorative Background Icon */}
-              <Users className="absolute -right-4 -bottom-4 text-gray-50 dark:text-gray-800/20 w-32 h-32 -z-0 group-hover:text-purple-50 transition-colors duration-500" />
-            </div>
-          ))}
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead className="bg-gray-50/50">
+              <tr>
+                <th className="px-10 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Client Identity</th>
+                <th className="px-10 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Engagement</th>
+                <th className="px-10 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Reward Points</th>
+                <th className="px-10 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest">Recent Activity</th>
+                <th className="px-10 py-5 text-[10px] font-black text-gray-400 uppercase tracking-widest"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {loading ? (
+                <tr><td colSpan={5} className="p-20 text-center"><Loader2 className="animate-spin mx-auto text-purple-600 mb-4" size={32}/><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Syncing Records...</p></td></tr>
+              ) : filteredCustomers.length === 0 ? (
+                <tr><td colSpan={5} className="p-32 text-center text-gray-300 font-bold italic border-2 border-dashed border-gray-50 m-4 rounded-[2rem]">No customer data available yet</td></tr>
+              ) : (
+                filteredCustomers.map((customer) => (
+                  <tr key={customer.id} className="hover:bg-gray-50/50 transition-colors group cursor-pointer">
+                    <td className="px-10 py-6">
+                       <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-purple-700 rounded-2xl flex items-center justify-center text-white font-black shadow-lg shadow-purple-100 group-hover:scale-110 transition-transform">
+                             {customer.full_name.charAt(0)}
+                          </div>
+                          <div>
+                             <p className="font-black text-gray-900 group-hover:text-purple-600 transition-colors">{customer.full_name}</p>
+                             <p className="text-[10px] text-gray-400 font-bold tracking-widest uppercase mt-1">{customer.phone}</p>
+                          </div>
+                       </div>
+                    </td>
+                    <td className="px-10 py-6 text-center">
+                       <span className="bg-blue-50 text-blue-600 border border-blue-100 px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-tighter">
+                         {customer.total_bookings} Bookings
+                       </span>
+                    </td>
+                    <td className="px-10 py-6">
+                       <div className="flex items-center gap-2 text-emerald-600 font-black">
+                          <Gift size={16} className="text-emerald-400"/>
+                          <span className="text-lg">{customer.loyalty_points}</span>
+                          <span className="text-[10px] text-gray-300 font-bold tracking-tighter">PTS</span>
+                       </div>
+                    </td>
+                    <td className="px-10 py-6">
+                       <div className="flex flex-col">
+                          <span className="text-sm text-gray-600 font-bold italic">{customer.last_visit}</span>
+                          <span className="text-[9px] text-gray-300 font-black uppercase">Last Invoice Paid</span>
+                       </div>
+                    </td>
+                    <td className="px-10 py-6 text-right">
+                       <button className="p-3 text-gray-300 hover:text-purple-600 hover:bg-white rounded-xl shadow-sm transition-all">
+                         <ArrowUpRight size={20}/>
+                       </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
-      )}
+      </div>
     </div>
   );
 };
