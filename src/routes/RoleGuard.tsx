@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -8,10 +8,20 @@ interface RoleGuardProps {
 }
 
 const RoleGuard = ({ children, allowedRoles }: RoleGuardProps) => {
-  const { user, role, loading } = useAuth();
+  const { user, role, dbUser, loading, dbLoaded } = useAuth();
   const location = useLocation();
 
-  // 1. شاشة انتظار أثناء التحقق من البيانات
+  // لو dbLoaded ماخلصش بسرعة، ما نعلقش للأبد
+  const [waitedTooLong, setWaitedTooLong] = useState(false);
+
+  useEffect(() => {
+    if (!user) return;
+    if (dbLoaded) return;
+
+    const t = setTimeout(() => setWaitedTooLong(true), 4000);
+    return () => clearTimeout(t);
+  }, [user, dbLoaded]);
+
   if (loading) {
     return (
       <div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-[#030712]">
@@ -23,22 +33,37 @@ const RoleGuard = ({ children, allowedRoles }: RoleGuardProps) => {
     );
   }
 
-  // 2. الحصول على الدور الحالي (من قاعدة البيانات أو الميتاداتا)
-  const currentRole = role || user?.user_metadata?.role;
-
-  // 3. إذا لم يسجل دخول، يتم تحويله لصفحة الـ Landing
   if (!user) {
-    return <Navigate to="/landing" state={{ from: location }} replace />;
+    return <Navigate to="/" state={{ from: location }} replace />;
   }
 
-  // 4. التحقق إذا كان دوره مسموحاً له بدخول هذه الصفحة
-  // ملاحظة: الأدمن (admin) مسموح له بدخول كل شيء عادةً كـ Superuser
-  if (!allowedRoles.includes(currentRole as any) && currentRole !== 'admin') {
-    console.error("Permission Denied for role:", currentRole);
+  // استنى dbLoaded، لكن لو اتأخر زيادة استخدم metadata بدل ما نعلق
+  if (!dbLoaded && !waitedTooLong) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-gray-50 dark:bg-[#030712]">
+        <div className="animate-pulse flex flex-col items-center">
+          <div className="h-10 w-10 bg-purple-600 rounded-full mb-4"></div>
+          <p className="text-xs font-black text-purple-600">LOADING PROFILE...</p>
+          <p className="text-[10px] font-bold text-gray-400 mt-2 uppercase tracking-widest">Fetching permissions</p>
+        </div>
+      </div>
+    );
+  }
+
+  const currentRole =
+    (role || dbUser?.role || user.user_metadata?.role) as 'admin' | 'merchant' | 'customer' | undefined;
+
+  if (!currentRole) {
+    // لو لسه role مش واضح بعد المهلة → رجّعه للـ Home بدل ما يعلق
+    return <Navigate to="/" replace />;
+  }
+
+  if (currentRole === 'admin') return <>{children}</>;
+
+  if (!allowedRoles.includes(currentRole)) {
     return <Navigate to="/unauthorized" replace />;
   }
 
-  // 5. إذا كان كل شيء تمام، اعرض الصفحة
   return <>{children}</>;
 };
 

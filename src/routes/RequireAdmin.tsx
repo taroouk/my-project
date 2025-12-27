@@ -3,10 +3,10 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 const RequireAdmin = ({ children }: { children: ReactNode }) => {
-  const { user, role, loading } = useAuth();
+  const { user, role, dbUser, loading, dbLoaded } = useAuth();
   const location = useLocation();
 
-  // 1. حالة التحميل: ننتظر حتى نتأكد من هوية المستخدم
+  // 1) Auth loading
   if (loading) {
     return (
       <div className="h-screen flex items-center justify-center bg-white dark:bg-[#030712]">
@@ -18,16 +18,31 @@ const RequireAdmin = ({ children }: { children: ReactNode }) => {
     );
   }
 
-  // 2. التحقق من الدور (Role): نقرأ من الـ State أو من ميتاداتا المستخدم مباشرة
-  const currentRole = role || user?.user_metadata?.role;
-
-  // 3. إذا لم يكن مسجلاً أو ليس أدمن، يتم تحويله لصفحة تسجيل دخول الأدمن
-  if (!user || currentRole !== 'admin') {
-    console.warn("Access Denied: User is not an admin", { role: currentRole });
+  // 2) لو مفيش user أصلاً → روح login
+  if (!user) {
     return <Navigate to="/login/admin" state={{ from: location }} replace />;
   }
 
-  // 4. إذا كان أدمن، يتم السماح له بالدخول
+  // 3) لو user موجود ولسه dbUser ماخلصش → استنى هنا عشان ما نعملش redirect غلط
+  if (!dbLoaded) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-white dark:bg-[#030712]">
+        <div className="flex flex-col items-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-600 mb-4"></div>
+          <p className="text-sm font-bold text-gray-500 animate-pulse">LOADING ACCOUNT...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // 4) التحقق من الدور من أكثر من مصدر
+  const currentRole = role || dbUser?.role || user.user_metadata?.role;
+
+  if (currentRole !== 'admin') {
+    console.warn('Access Denied: User is not an admin', { role: currentRole });
+    return <Navigate to="/login/admin" state={{ from: location }} replace />;
+  }
+
   return <>{children}</>;
 };
 
