@@ -7,12 +7,11 @@ import { useTheme } from "./contexts/ThemeContext";
 
 // PAGES & COMPONENTS
 import Signup from "./pages/Signup";
+import Login from "./pages/Login";
 import LandingPage from "./components/LandingPage";
-import StoreFront from "./pages/store/StoreFront"; // ✅ واحد بس
+import StoreFront from "./pages/store/StoreFront";
 import SetupStore from "./pages/dashboard/merchant/setup";
 import AdminLogin from "./pages/admin/AdminLogin";
-import MerchantLogin from "./pages/auth/MerchantLogin";
-import CustomerLogin from "./pages/auth/CustomerLogin";
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import CustomerDashboard from "./pages/dashboard/customer/CustomerDashboard";
 import MerchantDashboard from "./pages/dashboard/merchant/MerchantDashboard";
@@ -63,8 +62,9 @@ function App() {
           language={language}
           setLanguage={setLanguage}
           onGetStarted={() => navigate("/signup")}
-          onCustomerLogin={() => navigate("/login/customer")}
-          onMerchantLogin={() => navigate("/login/merchant")}
+          // ✅ one unified login page
+          onCustomerLogin={() => navigate("/login")}
+          onMerchantLogin={() => navigate("/login")}
         />
       );
     }
@@ -94,14 +94,13 @@ function App() {
         {/* Public Routes */}
         <Route path="/" element={<HomePageRedirect />} />
         <Route path="/signup" element={<Signup />} />
+        <Route path="/login" element={<Login />} />
 
         {/* ✅ Store route مرة واحدة فقط */}
         <Route path="/s/:slug" element={<StoreFront />} />
 
-        {/* Auth Routes */}
+        {/* Admin Auth (optional separate) */}
         <Route path="/login/admin" element={<AdminLogin />} />
-        <Route path="/login/merchant" element={<MerchantLogin />} />
-        <Route path="/login/customer" element={<CustomerLogin />} />
 
         {/* Merchant */}
         <Route

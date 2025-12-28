@@ -16,7 +16,20 @@ try {
   throw new Error("Invalid Supabase URL format");
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+/**
+ * ✅ IMPORTANT:
+ * - persistSession: يخلي session تفضل موجودة بعد ما تقفل/تفتح
+ * - autoRefreshToken: يجدد التوكن تلقائي
+ * - detectSessionInUrl: مهم للـ magic link / email confirm
+ */
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+    storage: localStorage,
+  },
+});
 
 // =====================
 // Shared Types
@@ -26,7 +39,7 @@ export type Currency = "SAR" | "EGP" | "AED" | "USD";
 
 // =====================
 // User row (partial)
-/// =====================
+// =====================
 export interface User {
   id: string;
   email: string;
@@ -102,11 +115,7 @@ export type ProductRow = {
  * ✅ PromiseLike timeout helper
  * (Supabase builder is thenable, so TS accepts PromiseLike)
  */
-export function withTimeout<T>(
-  promiseLike: PromiseLike<T>,
-  ms: number,
-  label = "Request"
-): Promise<T> {
+export function withTimeout<T>(promiseLike: PromiseLike<T>, ms: number, label = "Request"): Promise<T> {
   let timer: number | undefined;
 
   const timeoutPromise = new Promise<T>((_, reject) => {
@@ -118,6 +127,25 @@ export function withTimeout<T>(
   return Promise.race([realPromise, timeoutPromise]).finally(() => {
     if (timer) window.clearTimeout(timer);
   });
+}
+
+export async function supabasePing(timeoutMs = 1500): Promise<boolean> {
+  try {
+    const controller = new AbortController();
+    const t = window.setTimeout(() => controller.abort(), timeoutMs);
+
+    const r = await fetch(supabaseUrl!, {
+      method: "GET",
+      mode: "no-cors",
+      signal: controller.signal,
+    });
+
+    window.clearTimeout(t);
+
+    return !!r;
+  } catch {
+    return false;
+  }
 }
 
 // =====================
@@ -142,6 +170,7 @@ export async function getPublicStoreBySlug(slug: string): Promise<StorePublic | 
 
 export async function getPublicServicesByMerchant(merchantId: string): Promise<ServiceRow[]> {
   if (!merchantId) return [];
+
   const res = await supabase
     .from("services")
     .select("id, merchant_id, name, description, price, is_active, created_at")
@@ -156,6 +185,7 @@ export async function getPublicServicesByMerchant(merchantId: string): Promise<S
 
 export async function getPublicProductsByMerchant(merchantId: string): Promise<ProductRow[]> {
   if (!merchantId) return [];
+
   const res = await supabase
     .from("products")
     .select("id, merchant_id, name, description, price, is_active, created_at")
