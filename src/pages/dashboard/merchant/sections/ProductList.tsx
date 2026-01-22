@@ -16,8 +16,9 @@ import {
   CheckCircle2,
   AlertCircle,
   Image as ImageIcon,
-  AlignLeft,
 } from 'lucide-react';
+
+import { useMerchantLang } from '../useMerchantLang';
 
 interface ProductRow {
   id: string;
@@ -34,6 +35,7 @@ type ModalMode = 'create' | 'edit';
 
 const ProductList = () => {
   const { user, dbUser, dbLoaded, loading } = useAuth();
+  const { t, dir } = useMerchantLang();
   const { isDarkMode } = useTheme();
 
   const [products, setProducts] = useState<ProductRow[]>([]);
@@ -96,8 +98,8 @@ const ProductList = () => {
   // toast auto hide
   useEffect(() => {
     if (!successMsg) return;
-    const t = setTimeout(() => setSuccessMsg(null), 2500);
-    return () => clearTimeout(t);
+    const tt = setTimeout(() => setSuccessMsg(null), 2500);
+    return () => clearTimeout(tt);
   }, [successMsg]);
 
   useEffect(() => {
@@ -121,7 +123,7 @@ const ProductList = () => {
       setProducts((data as ProductRow[]) || []);
     } catch (err: any) {
       console.error('Fetch products error:', err?.message || err);
-      setError(err?.message || 'Failed to load products.');
+      setError(err?.message || t('Failed to load products.', 'فشل تحميل المنتجات.'));
     } finally {
       setPageLoading(false);
     }
@@ -131,10 +133,7 @@ const ProductList = () => {
     const s = search.trim().toLowerCase();
     if (!s) return products;
     return products.filter((p) => {
-      return (
-        p.name?.toLowerCase().includes(s) ||
-        (p.description || '').toLowerCase().includes(s)
-      );
+      return p.name?.toLowerCase().includes(s) || (p.description || '').toLowerCase().includes(s);
     });
   }, [products, search]);
 
@@ -165,12 +164,13 @@ const ProductList = () => {
   };
 
   const validate = () => {
-    if (!user?.id) return 'No authenticated session.';
-    if (!form.name.trim()) return 'Please enter product name.';
+    if (!user?.id) return t('No authenticated session.', 'لا يوجد جلسة تسجيل دخول.');
+    if (!form.name.trim()) return t('Please enter product name.', 'من فضلك أدخل اسم المنتج.');
     const priceNum = Number(form.price);
-    if (!Number.isFinite(priceNum) || priceNum < 0) return 'Please enter a valid price.';
+    if (!Number.isFinite(priceNum) || priceNum < 0) return t('Please enter a valid price.', 'من فضلك أدخل سعر صحيح.');
     const stockNum = Number(form.stock_quantity);
-    if (!Number.isFinite(stockNum) || stockNum < 0) return 'Please enter a valid stock quantity.';
+    if (!Number.isFinite(stockNum) || stockNum < 0)
+      return t('Please enter a valid stock quantity.', 'من فضلك أدخل كمية مخزون صحيحة.');
     return null;
   };
 
@@ -198,9 +198,9 @@ const ProductList = () => {
       if (mode === 'create') {
         const { error } = await supabase.from('products').insert([payload]);
         if (error) throw error;
-        setSuccessMsg('Product created');
+        setSuccessMsg(t('Product created', 'تم إنشاء المنتج'));
       } else {
-        if (!editingId) throw new Error('Missing id');
+        if (!editingId) throw new Error(t('Missing id', 'المعرف غير موجود'));
         const { error } = await supabase
           .from('products')
           .update({
@@ -214,7 +214,7 @@ const ProductList = () => {
           .eq('merchant_id', user.id);
 
         if (error) throw error;
-        setSuccessMsg('Product updated');
+        setSuccessMsg(t('Product updated', 'تم تحديث المنتج'));
       }
 
       setShowModal(false);
@@ -222,7 +222,7 @@ const ProductList = () => {
       await fetchProducts();
     } catch (err: any) {
       console.error('Save product error:', err?.message || err);
-      setError(err?.message || 'Insert/Update failed.');
+      setError(err?.message || t('Insert/Update failed.', 'فشل الإضافة/التعديل.'));
     } finally {
       setActionLoading(false);
     }
@@ -230,26 +230,22 @@ const ProductList = () => {
 
   const deleteProduct = async (id: string) => {
     if (!user?.id) return;
-    const ok = window.confirm('Delete this product?');
+    const ok = window.confirm(t('Delete this product?', 'حذف هذا المنتج؟'));
     if (!ok) return;
 
     setActionLoading(true);
     setError(null);
 
     try {
-      const { error } = await supabase
-        .from('products')
-        .delete()
-        .eq('id', id)
-        .eq('merchant_id', user.id);
+      const { error } = await supabase.from('products').delete().eq('id', id).eq('merchant_id', user.id);
 
       if (error) throw error;
 
-      setSuccessMsg('Product deleted');
+      setSuccessMsg(t('Product deleted', 'تم حذف المنتج'));
       await fetchProducts();
     } catch (err: any) {
       console.error('Delete product error:', err?.message || err);
-      setError(err?.message || 'Delete failed.');
+      setError(err?.message || t('Delete failed.', 'فشل الحذف.'));
     } finally {
       setActionLoading(false);
     }
@@ -259,24 +255,31 @@ const ProductList = () => {
     return (
       <div className="h-80 flex flex-col items-center justify-center gap-4">
         <Loader2 className="w-10 h-10 text-indigo-600 animate-spin" />
-        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Loading...</p>
+        <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{t('Loading...', 'جارٍ التحميل...')}</p>
       </div>
     );
   }
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500" dir="ltr">
+    <div className="space-y-8 animate-in fade-in duration-500" dir={dir}>
       {/* Header */}
-      <div className={`${ui.surface} p-8 rounded-[2.5rem] border ${ui.borderSoft} shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6`}>
+      <div
+        className={`${ui.surface} p-8 rounded-[2.5rem] border ${ui.borderSoft} shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-6`}
+      >
         <div>
-          <h2 className={`text-3xl font-black tracking-tighter italic ${ui.title}`}>Physical Products</h2>
+          <h2 className={`text-3xl font-black tracking-tighter italic ${ui.title}`}>
+            {t('Physical Products', 'منتجات فعلية')}
+          </h2>
           <p className={`text-[10px] font-bold uppercase tracking-[0.2em] mt-1 ${ui.muted}`}>
-            Manage your inventory and direct sales
+            {t('Manage your inventory and direct sales', 'إدارة المخزون والمبيعات المباشرة')}
           </p>
         </div>
 
-        <button onClick={openCreate} className={`px-8 py-4 rounded-2xl font-black flex items-center justify-center gap-2 transition-all shadow-xl active:scale-95 ${ui.btn}`}>
-          <Plus size={20} /> Add Product
+        <button
+          onClick={openCreate}
+          className={`px-8 py-4 rounded-2xl font-black flex items-center justify-center gap-2 transition-all shadow-xl active:scale-95 ${ui.btn}`}
+        >
+          <Plus size={20} /> {t('Add Product', 'إضافة منتج')}
         </button>
       </div>
 
@@ -284,20 +287,33 @@ const ProductList = () => {
       {(error || successMsg) && (
         <div className="space-y-3">
           {error && (
-            <div className={`rounded-2xl border p-4 flex items-start gap-3 ${isDarkMode ? 'bg-rose-950/20 border-rose-900/40' : 'bg-rose-50 border-rose-100'}`}>
+            <div
+              className={`rounded-2xl border p-4 flex items-start gap-3 ${
+                isDarkMode ? 'bg-rose-950/20 border-rose-900/40' : 'bg-rose-50 border-rose-100'
+              }`}
+            >
               <AlertCircle className={isDarkMode ? 'text-rose-300' : 'text-rose-600'} size={18} />
               <div className="flex-1">
-                <p className={`text-sm font-black ${isDarkMode ? 'text-rose-200' : 'text-rose-700'}`}>Action blocked</p>
+                <p className={`text-sm font-black ${isDarkMode ? 'text-rose-200' : 'text-rose-700'}`}>
+                  {t('Action blocked', 'تعذر التنفيذ')}
+                </p>
                 <p className={`text-xs font-bold mt-1 ${isDarkMode ? 'text-rose-300/90' : 'text-rose-600'}`}>{error}</p>
-                <button onClick={fetchProducts} className={`mt-3 text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl ${ui.btnSoft}`}>
-                  Retry
+                <button
+                  onClick={fetchProducts}
+                  className={`mt-3 text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl ${ui.btnSoft}`}
+                >
+                  {t('Retry', 'إعادة المحاولة')}
                 </button>
               </div>
             </div>
           )}
 
           {successMsg && (
-            <div className={`rounded-2xl border p-4 flex items-center gap-3 ${isDarkMode ? 'bg-emerald-950/20 border-emerald-900/40' : 'bg-emerald-50 border-emerald-100'}`}>
+            <div
+              className={`rounded-2xl border p-4 flex items-center gap-3 ${
+                isDarkMode ? 'bg-emerald-950/20 border-emerald-900/40' : 'bg-emerald-50 border-emerald-100'
+              }`}
+            >
               <CheckCircle2 className={isDarkMode ? 'text-emerald-300' : 'text-emerald-600'} size={18} />
               <p className={`text-sm font-black ${isDarkMode ? 'text-emerald-100' : 'text-emerald-700'}`}>{successMsg}</p>
             </div>
@@ -308,44 +324,73 @@ const ProductList = () => {
       {/* Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className={`${ui.surface} p-6 rounded-3xl border ${ui.borderSoft} flex items-center gap-4`}>
-          <div className={`${isDarkMode ? 'bg-indigo-950/30 text-indigo-300 border border-indigo-900/40' : 'bg-indigo-50 text-indigo-600 border border-indigo-100'} w-12 h-12 rounded-2xl flex items-center justify-center`}>
+          <div
+            className={`${
+              isDarkMode
+                ? 'bg-indigo-950/30 text-indigo-300 border border-indigo-900/40'
+                : 'bg-indigo-50 text-indigo-600 border border-indigo-100'
+            } w-12 h-12 rounded-2xl flex items-center justify-center`}
+          >
             <Package size={24} />
           </div>
           <div>
-            <p className={`text-[10px] font-black uppercase ${ui.muted}`}>Total SKUs</p>
+            <p className={`text-[10px] font-black uppercase ${ui.muted}`}>{t('Total SKUs', 'إجمالي المنتجات')}</p>
             <p className={`text-xl font-black ${ui.title}`}>{stats.total}</p>
           </div>
         </div>
 
         <div className={`${ui.surface} p-6 rounded-3xl border ${ui.borderSoft} flex items-center gap-4`}>
-          <div className={`${isDarkMode ? 'bg-amber-950/20 text-amber-300 border border-amber-900/40' : 'bg-amber-50 text-amber-600 border border-amber-100'} w-12 h-12 rounded-2xl flex items-center justify-center`}>
+          <div
+            className={`${
+              isDarkMode
+                ? 'bg-amber-950/20 text-amber-300 border border-amber-900/40'
+                : 'bg-amber-50 text-amber-600 border border-amber-100'
+            } w-12 h-12 rounded-2xl flex items-center justify-center`}
+          >
             <AlertTriangle size={24} />
           </div>
           <div>
-            <p className={`text-[10px] font-black uppercase ${ui.muted}`}>Low Stock</p>
-            <p className={`${isDarkMode ? 'text-amber-200' : 'text-amber-700'} text-xl font-black`}>{stats.low} Items</p>
+            <p className={`text-[10px] font-black uppercase ${ui.muted}`}>{t('Low Stock', 'مخزون منخفض')}</p>
+            <p className={`${isDarkMode ? 'text-amber-200' : 'text-amber-700'} text-xl font-black`}>
+              {stats.low} {t('Items', 'عنصر')}
+            </p>
           </div>
         </div>
 
         <div className={`${ui.surface} p-6 rounded-3xl border ${ui.borderSoft} flex items-center gap-4`}>
-          <div className={`${isDarkMode ? 'bg-rose-950/20 text-rose-300 border border-rose-900/40' : 'bg-rose-50 text-rose-600 border border-rose-100'} w-12 h-12 rounded-2xl flex items-center justify-center`}>
+          <div
+            className={`${
+              isDarkMode
+                ? 'bg-rose-950/20 text-rose-300 border border-rose-900/40'
+                : 'bg-rose-50 text-rose-600 border border-rose-100'
+            } w-12 h-12 rounded-2xl flex items-center justify-center`}
+          >
             <ShoppingCart size={24} />
           </div>
           <div>
-            <p className={`text-[10px] font-black uppercase ${ui.muted}`}>Out of Stock</p>
-            <p className={`${isDarkMode ? 'text-rose-200' : 'text-rose-700'} text-xl font-black`}>{stats.out} Items</p>
+            <p className={`text-[10px] font-black uppercase ${ui.muted}`}>{t('Out of Stock', 'نفد المخزون')}</p>
+            <p className={`${isDarkMode ? 'text-rose-200' : 'text-rose-700'} text-xl font-black`}>
+              {stats.out} {t('Items', 'عنصر')}
+            </p>
           </div>
         </div>
       </div>
 
       {/* Search */}
       <div className="relative group">
-        <Search className={`absolute left-5 top-1/2 -translate-y-1/2 transition-colors ${isDarkMode ? 'text-slate-500 group-focus-within:text-indigo-400' : 'text-slate-300 group-focus-within:text-indigo-600'}`} size={20} />
+        <Search
+          className={`absolute left-5 top-1/2 -translate-y-1/2 transition-colors ${
+            isDarkMode ? 'text-slate-500 group-focus-within:text-indigo-400' : 'text-slate-300 group-focus-within:text-indigo-600'
+          }`}
+          size={20}
+        />
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by name or description..."
-          className={`w-full rounded-2xl pl-14 pr-5 py-4 font-bold outline-none border focus:ring-4 transition-all shadow-sm ${ui.input} ${isDarkMode ? 'focus:ring-indigo-500/15' : 'focus:ring-indigo-100'}`}
+          placeholder={t('Search by name or description...', 'ابحث بالاسم أو الوصف...')}
+          className={`w-full rounded-2xl pl-14 pr-5 py-4 font-bold outline-none border focus:ring-4 transition-all shadow-sm ${ui.input} ${
+            isDarkMode ? 'focus:ring-indigo-500/15' : 'focus:ring-indigo-100'
+          }`}
         />
       </div>
 
@@ -354,17 +399,27 @@ const ProductList = () => {
         {pageLoading ? (
           <div className="col-span-full h-64 flex flex-col items-center justify-center gap-4">
             <Loader2 className="animate-spin text-indigo-600" size={32} />
-            <p className={`text-[10px] font-black uppercase tracking-widest ${ui.muted}`}>Scanning Warehouse...</p>
+            <p className={`text-[10px] font-black uppercase tracking-widest ${ui.muted}`}>
+              {t('Scanning Warehouse...', 'جارٍ فحص المخزن...')}
+            </p>
           </div>
         ) : filtered.length === 0 ? (
-          <div className={`col-span-full ${isDarkMode ? 'bg-slate-900/20 border-slate-800' : 'bg-slate-50 border-slate-100'} rounded-[3rem] p-20 text-center border-2 border-dashed flex flex-col items-center`}>
-            <div className={`${ui.surface} w-20 h-20 rounded-full flex items-center justify-center ${isDarkMode ? 'text-slate-600 border border-slate-800' : 'text-slate-300 shadow-sm'} mb-6`}>
+          <div
+            className={`col-span-full ${
+              isDarkMode ? 'bg-slate-900/20 border-slate-800' : 'bg-slate-50 border-slate-100'
+            } rounded-[3rem] p-20 text-center border-2 border-dashed flex flex-col items-center`}
+          >
+            <div
+              className={`${ui.surface} w-20 h-20 rounded-full flex items-center justify-center ${
+                isDarkMode ? 'text-slate-600 border border-slate-800' : 'text-slate-300 shadow-sm'
+              } mb-6`}
+            >
               <Package size={40} />
             </div>
-            <h3 className={`text-xl font-black mb-2 ${ui.title}`}>No products found</h3>
-            <p className={`${ui.muted} font-bold mb-8 text-sm max-w-xs`}>Add products to start selling.</p>
+            <h3 className={`text-xl font-black mb-2 ${ui.title}`}>{t('No products found', 'لا توجد منتجات')}</h3>
+            <p className={`${ui.muted} font-bold mb-8 text-sm max-w-xs`}>{t('Add products to start selling.', 'أضف منتجات لبدء البيع.')}</p>
             <button onClick={openCreate} className={`px-8 py-4 rounded-2xl font-black transition-all ${ui.btn}`}>
-              Add your first product
+              {t('Add your first product', 'أضف أول منتج')}
             </button>
           </div>
         ) : (
@@ -384,28 +439,49 @@ const ProductList = () => {
                 : 'bg-rose-50 text-rose-600 border-rose-100';
 
             return (
-              <div key={p.id} className={`${ui.surface} p-5 rounded-[2.5rem] border ${ui.borderSoft} shadow-sm hover:shadow-2xl hover:-translate-y-1 transition-all group relative`}>
+              <div
+                key={p.id}
+                className={`${ui.surface} p-5 rounded-[2.5rem] border ${ui.borderSoft} shadow-sm hover:shadow-2xl hover:-translate-y-1 transition-all group relative`}
+              >
                 <div className="absolute top-6 right-6 z-10 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
                   <button
                     onClick={() => openEdit(p)}
-                    className={`${isDarkMode ? 'bg-slate-900/60 text-slate-200 hover:text-indigo-300 border border-slate-800' : 'bg-white text-slate-500 hover:text-indigo-600 border border-slate-100'} p-2 rounded-xl shadow-sm transition-colors`}
-                    title="Edit"
+                    className={`${
+                      isDarkMode
+                        ? 'bg-slate-900/60 text-slate-200 hover:text-indigo-300 border border-slate-800'
+                        : 'bg-white text-slate-500 hover:text-indigo-600 border border-slate-100'
+                    } p-2 rounded-xl shadow-sm transition-colors`}
+                    title={t('Edit', 'تعديل')}
+                    aria-label={t('Edit', 'تعديل')}
                   >
                     <Edit3 size={16} />
                   </button>
                   <button
                     onClick={() => deleteProduct(p.id)}
                     disabled={actionLoading}
-                    className={`${isDarkMode ? 'bg-slate-900/60 text-slate-200 hover:text-rose-300 border border-slate-800' : 'bg-white text-slate-500 hover:text-rose-600 border border-slate-100'} p-2 rounded-xl shadow-sm transition-colors`}
-                    title="Delete"
+                    className={`${
+                      isDarkMode
+                        ? 'bg-slate-900/60 text-slate-200 hover:text-rose-300 border border-slate-800'
+                        : 'bg-white text-slate-500 hover:text-rose-600 border border-slate-100'
+                    } p-2 rounded-xl shadow-sm transition-colors`}
+                    title={t('Delete', 'حذف')}
+                    aria-label={t('Delete', 'حذف')}
                   >
                     <Trash2 size={16} />
                   </button>
                 </div>
 
-                <div className={`${isDarkMode ? 'bg-slate-900/30 border-slate-800' : 'bg-slate-50 border-slate-100'} w-full h-48 rounded-[2rem] mb-6 flex items-center justify-center overflow-hidden relative border`}>
+                <div
+                  className={`${
+                    isDarkMode ? 'bg-slate-900/30 border-slate-800' : 'bg-slate-50 border-slate-100'
+                  } w-full h-48 rounded-[2rem] mb-6 flex items-center justify-center overflow-hidden relative border`}
+                >
                   {p.image_url ? (
-                    <img src={p.image_url} alt={p.name} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+                    <img
+                      src={p.image_url}
+                      alt={p.name}
+                      className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                    />
                   ) : (
                     <Package size={48} className={isDarkMode ? 'text-slate-600' : 'text-slate-300'} />
                   )}
@@ -416,12 +492,12 @@ const ProductList = () => {
                   {p.description ? (
                     <p className={`text-sm font-bold leading-relaxed ${ui.muted}`}>{p.description}</p>
                   ) : (
-                    <p className={`text-sm font-bold leading-relaxed ${ui.muted}`}>No description</p>
+                    <p className={`text-sm font-bold leading-relaxed ${ui.muted}`}>{t('No description', 'لا يوجد وصف')}</p>
                   )}
 
                   <div className="flex justify-between items-end pt-2">
                     <div className="flex flex-col">
-                      <span className={`text-[9px] font-black uppercase tracking-tighter ${ui.muted}`}>Price</span>
+                      <span className={`text-[9px] font-black uppercase tracking-tighter ${ui.muted}`}>{t('Price', 'السعر')}</span>
                       <span className={`${isDarkMode ? 'text-indigo-300' : 'text-indigo-600'} text-2xl font-black tracking-tighter`}>
                         <small className="text-[10px] mr-1">{currency}</small>
                         {p.price}
@@ -429,7 +505,7 @@ const ProductList = () => {
                     </div>
 
                     <span className={`text-[9px] font-black px-3 py-1.5 rounded-xl border ${badge}`}>
-                      {qty === 0 ? 'Out of Stock' : `Stock: ${qty}`}
+                      {qty === 0 ? t('Out of Stock', 'نفد المخزون') : `${t('Stock', 'المخزون')}: ${qty}`}
                     </span>
                   </div>
                 </div>
@@ -442,7 +518,7 @@ const ProductList = () => {
                       : 'bg-slate-50 text-slate-500 hover:bg-indigo-600 hover:text-white border border-slate-100'
                   }`}
                 >
-                  Quick Edit <ArrowUpRight size={14} />
+                  {t('Quick Edit', 'تعديل سريع')} <ArrowUpRight size={14} />
                 </button>
               </div>
             );
@@ -461,42 +537,49 @@ const ProductList = () => {
                   setError(null);
                 }}
                 className={`absolute right-7 top-7 rounded-xl p-2 transition-colors ${isDarkMode ? 'text-slate-200 hover:bg-slate-900/40' : 'text-white/90 hover:bg-white/10'}`}
+                aria-label={t('Close', 'إغلاق')}
+                title={t('Close', 'إغلاق')}
               >
                 <X size={22} />
               </button>
 
               <h3 className={`text-2xl font-black italic tracking-tighter ${isDarkMode ? 'text-slate-50' : 'text-white'}`}>
-                {mode === 'create' ? 'New Product' : 'Edit Product'}
+                {mode === 'create' ? t('New Product', 'منتج جديد') : t('Edit Product', 'تعديل المنتج')}
               </h3>
               <p className={`font-bold text-[10px] mt-2 uppercase tracking-[0.2em] ${isDarkMode ? 'text-slate-300' : 'text-indigo-100'}`}>
-                Uses columns: name, description, price, stock_quantity, image_url
+                {t(
+                  'Uses columns: name, description, price, stock_quantity, image_url',
+                  'يستخدم أعمدة: الاسم، الوصف، السعر، كمية المخزون، رابط الصورة'
+                )}
               </p>
             </div>
 
             <div className="p-9 space-y-5">
               <div className="space-y-2">
-                <label className={`text-[10px] font-black ml-2 uppercase tracking-widest ${ui.muted}`}>Name</label>
+                <label className={`text-[10px] font-black ml-2 uppercase tracking-widest ${ui.muted}`}>{t('Name', 'الاسم')}</label>
                 <input
                   value={form.name}
                   onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
-                  placeholder="e.g. Shampoo"
+                  placeholder={t('e.g. Shampoo', 'مثال: شامبو')}
                   className={`w-full p-5 rounded-2xl font-bold outline-none border-2 focus:border-indigo-500 transition-all ${ui.input}`}
                 />
               </div>
 
               <div className="space-y-2">
-                <label className={`text-[10px] font-black ml-2 uppercase tracking-widest ${ui.muted}`}>Description</label>
+                <label className={`text-[10px] font-black ml-2 uppercase tracking-widest ${ui.muted}`}>{t('Description', 'الوصف')}</label>
                 <textarea
                   value={form.description}
                   onChange={(e) => setForm((p) => ({ ...p, description: e.target.value }))}
-                  placeholder="Optional details..."
+                  placeholder={t('Optional details...', 'تفاصيل اختيارية...')}
                   className={`w-full min-h-[110px] p-5 rounded-2xl font-bold outline-none border-2 focus:border-indigo-500 transition-all ${ui.input}`}
                 />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <label className={`text-[10px] font-black ml-2 uppercase tracking-widest ${ui.muted}`}>Price ({currency})</label>
+                  <label className={`text-[10px] font-black ml-2 uppercase tracking-widest ${ui.muted}`}>
+                    {t('Price', 'السعر')} ({currency})
+                  </label>
                   <input
                     value={form.price}
                     onChange={(e) => setForm((p) => ({ ...p, price: e.target.value }))}
@@ -507,7 +590,7 @@ const ProductList = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <label className={`text-[10px] font-black ml-2 uppercase tracking-widest ${ui.muted}`}>Stock Quantity</label>
+                  <label className={`text-[10px] font-black ml-2 uppercase tracking-widest ${ui.muted}`}>{t('Stock Quantity', 'كمية المخزون')}</label>
                   <input
                     value={form.stock_quantity}
                     onChange={(e) => setForm((p) => ({ ...p, stock_quantity: e.target.value }))}
@@ -519,7 +602,7 @@ const ProductList = () => {
               </div>
 
               <div className="space-y-2">
-                <label className={`text-[10px] font-black ml-2 uppercase tracking-widest ${ui.muted}`}>Image URL (optional)</label>
+                <label className={`text-[10px] font-black ml-2 uppercase tracking-widest ${ui.muted}`}>{t('Image URL (optional)', 'رابط الصورة (اختياري)')}</label>
                 <div className="relative">
                   <ImageIcon className={`absolute left-4 top-1/2 -translate-y-1/2 ${isDarkMode ? 'text-slate-500' : 'text-slate-300'}`} size={18} />
                   <input
@@ -540,10 +623,10 @@ const ProductList = () => {
 
               <div className="flex gap-4 pt-2">
                 <button disabled={actionLoading} onClick={() => setShowModal(false)} className={`flex-1 py-5 rounded-2xl font-black uppercase text-xs tracking-widest ${ui.btnSoft}`}>
-                  Cancel
+                  {t('Cancel', 'إلغاء')}
                 </button>
                 <button disabled={actionLoading} onClick={handleSave} className={`flex-1 py-5 rounded-2xl font-black shadow-2xl flex items-center justify-center gap-2 uppercase text-xs tracking-widest ${ui.btn}`}>
-                  {actionLoading ? <Loader2 className="animate-spin" size={20} /> : mode === 'create' ? 'Create' : 'Save'}
+                  {actionLoading ? <Loader2 className="animate-spin" size={20} /> : mode === 'create' ? t('Create', 'إنشاء') : t('Save', 'حفظ')}
                 </button>
               </div>
             </div>
@@ -552,7 +635,7 @@ const ProductList = () => {
       )}
 
       <div className={`text-[10px] font-bold ${ui.muted}`}>
-        Table: <span className="font-black">products</span> • uses <span className="font-black">stock_quantity</span> • merchant scoped
+        {t('Table', 'الجدول')}: <span className="font-black">products</span> • {t('uses', 'يستخدم')} <span className="font-black">stock_quantity</span> • {t('merchant scoped', 'حسب التاجر')}
       </div>
     </div>
   );

@@ -9,7 +9,11 @@ import { useTheme } from "./contexts/ThemeContext";
 import Signup from "./pages/Signup";
 import Login from "./pages/Login";
 import LandingPage from "./components/LandingPage";
+
+// ✅ Store pages
 import StoreFront from "./pages/store/StoreFront";
+import Stores from "./pages/store/Stores"; // ✅ NEW
+
 import SetupStore from "./pages/dashboard/merchant/setup";
 import AdminLogin from "./pages/admin/AdminLogin";
 import AdminDashboard from "./pages/admin/AdminDashboard";
@@ -19,6 +23,7 @@ import MerchantDashboard from "./pages/dashboard/merchant/MerchantDashboard";
 // GUARDS
 import RequireAdmin from "./routes/RequireAdmin";
 import RoleGuard from "./routes/RoleGuard";
+import CartPage from "./pages/cart/CartPage";
 
 function App() {
   const { user, dbUser, role, loading, dbLoaded } = useAuth();
@@ -95,9 +100,13 @@ function App() {
         <Route path="/" element={<HomePageRedirect />} />
         <Route path="/signup" element={<Signup />} />
         <Route path="/login" element={<Login />} />
+        
 
-        {/* ✅ Store route مرة واحدة فقط */}
-        <Route path="/s/:slug" element={<StoreFront />} />
+        {/* ✅ Public Store Directory + Store Page */}
+        <Route path="/stores" element={<Stores />} />        {/* ✅ NEW */}
+        <Route path="/s/:slug" element={<StoreFront />} />   {/* ✅ existing */}
+        <Route path="/cart" element={<CartPage />} />
+
 
         {/* Admin Auth (optional separate) */}
         <Route path="/login/admin" element={<AdminLogin />} />

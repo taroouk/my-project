@@ -15,8 +15,17 @@ import {
   BadgeCheck,
   Box,
   PanelsTopLeft,
+  ListPlus,
 } from "lucide-react";
 import { supabase } from "../../../lib/supabaseClient";
+
+// ✅ Categories helpers (same one used in Settings)
+import {
+  BUSINESS_CATEGORIES,
+  joinBusinessCategory,
+  splitBusinessCategory,
+  type BusinessCategoryValue,
+} from "./sections/businessCategories";
 
 type ThemePreference = "grid" | "list" | "cards" | "minimal" | "hero" | "catalog";
 type Currency = "SAR" | "EGP" | "AED" | "USD";
@@ -43,11 +52,22 @@ const DEMO_ITEMS = [
 
 const SetupStore = () => {
   const navigate = useNavigate();
-  const { updateProfile } = useAuth();
+  const { updateProfile, user, dbUser } = useAuth() as any;
   const { isDarkMode } = useTheme();
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>("");
+
+  // ✅ category initial (from dbUser OR auth metadata) — fallback "salon"
+  const initialCategory = useMemo(() => {
+    const raw =
+      (dbUser as any)?.business_type ||
+      (dbUser as any)?.business_category ||
+      (user?.user_metadata as any)?.business_type ||
+      (user?.user_metadata as any)?.business_category ||
+      "salon";
+    return splitBusinessCategory(String(raw));
+  }, [dbUser, user]);
 
   const [formData, setFormData] = useState<{
     store_name: string;
@@ -55,12 +75,20 @@ const SetupStore = () => {
     theme_preference: ThemePreference;
     brand_color: string;
     currency: Currency;
+
+    // ✅ NEW
+    business_category_value: BusinessCategoryValue;
+    business_category_custom: string;
   }>({
     store_name: "",
     store_slug: "",
     theme_preference: "grid",
     brand_color: "#6366F1",
     currency: "SAR",
+
+    // ✅ NEW
+    business_category_value: initialCategory.value,
+    business_category_custom: initialCategory.custom,
   });
 
   const ui = useMemo(() => {
@@ -234,7 +262,23 @@ const SetupStore = () => {
     if (!name) return "Store name is required.";
     const slug = slugify(formData.store_slug || name);
     if (!slug || slug.length < 3) return "Store link must be at least 3 characters.";
+
+    // ✅ validate custom category when Other
+    if (formData.business_category_value === "other" && !formData.business_category_custom.trim()) {
+      return "Please enter your business category.";
+    }
+
     return "";
+  };
+
+  // ✅ safe helper (same style as Settings)
+  const stripMissingColumns = (errMsg: string, payload: Record<string, any>) => {
+    const m = errMsg.match(/Could not find the '(.+?)' column/);
+    const missing = m?.[1];
+    if (!missing) return payload;
+    const cloned = { ...payload };
+    delete cloned[missing];
+    return cloned;
   };
 
   const handleCompleteSetup = async (e: React.FormEvent) => {
@@ -257,16 +301,42 @@ const SetupStore = () => {
         return;
       }
 
-      const res = await updateProfile({
+      // ✅ keep existing backend payload, فقط أضف business_type (safe)
+      let payload: Record<string, any> = {
         store_name: storeName,
         store_slug: slug,
         theme_preference: formData.theme_preference,
         brand_color: formData.brand_color,
         currency: formData.currency,
         setup_complete: true,
-      });
+
+        // ✅ NEW: save business category in business_type
+        business_type: joinBusinessCategory(formData.business_category_value, formData.business_category_custom),
+      };
+
+      let res = await updateProfile(payload);
+
+      // If DB column missing, retry without it (no backend changes)
+      if (res?.error) {
+        if (String(res.error).includes("Could not find the '") && String(res.error).includes("column")) {
+          payload = stripMissingColumns(String(res.error), payload);
+          res = await updateProfile(payload);
+        }
+      }
 
       if (res?.error) throw new Error(res.error);
+
+      // ✅ Also save in auth metadata as fallback (matches our Settings behavior)
+      try {
+        await supabase.auth.updateUser({
+          data: {
+            business_type: joinBusinessCategory(formData.business_category_value, formData.business_category_custom),
+            setup_complete: true,
+          },
+        });
+      } catch (e2) {
+        console.warn("metadata update warning:", (e2 as any)?.message || e2);
+      }
 
       localStorage.setItem("servly_setup_done", "true");
       navigate("/merchant", { replace: true });
@@ -283,6 +353,12 @@ const SetupStore = () => {
   const currency = formData.currency;
   const storeName = formData.store_name || "Store Name";
   const slug = formData.store_slug || slugify(formData.store_name || "your-store");
+
+  // ✅ FIX: readable category label for preview
+  const previewCategory =
+    formData.business_category_value === "other"
+      ? (formData.business_category_custom?.trim() || "Other")
+      : (BUSINESS_CATEGORIES.find((c) => c.value === formData.business_category_value)?.en || "Other");
 
   // ========== PREVIEW PARTS ==========
   const PreviewHeader = () => (
@@ -307,7 +383,9 @@ const SetupStore = () => {
       {DEMO_ITEMS.slice(0, 6).map((it) => (
         <div
           key={it.id}
-          className={`rounded-2xl border overflow-hidden ${isDarkMode ? "border-slate-800 bg-slate-950" : "border-gray-100 bg-white"}`}
+          className={`rounded-2xl border overflow-hidden ${
+            isDarkMode ? "border-slate-800 bg-slate-950" : "border-gray-100 bg-white"
+          }`}
         >
           <div className="h-16" style={{ backgroundColor: brand + "22" }} />
           <div className="p-3">
@@ -327,7 +405,9 @@ const SetupStore = () => {
       {DEMO_ITEMS.slice(0, 5).map((it) => (
         <div
           key={it.id}
-          className={`flex items-start justify-between gap-3 p-4 rounded-2xl border ${isDarkMode ? "border-slate-800 bg-slate-950" : "border-gray-100 bg-white"}`}
+          className={`flex items-start justify-between gap-3 p-4 rounded-2xl border ${
+            isDarkMode ? "border-slate-800 bg-slate-950" : "border-gray-100 bg-white"
+          }`}
         >
           <div className="min-w-0">
             <p className={`font-black text-[13px] truncate ${isDarkMode ? "text-slate-100" : "text-gray-900"}`}>{it.name}</p>
@@ -346,7 +426,9 @@ const SetupStore = () => {
       {DEMO_ITEMS.slice(0, 4).map((it) => (
         <div
           key={it.id}
-          className={`rounded-3xl border overflow-hidden ${isDarkMode ? "border-slate-800 bg-slate-950" : "border-gray-100 bg-white"}`}
+          className={`rounded-3xl border overflow-hidden ${
+            isDarkMode ? "border-slate-800 bg-slate-950" : "border-gray-100 bg-white"
+          }`}
         >
           <div className="h-20" style={{ backgroundColor: brand + "22" }} />
           <div className="p-4 flex items-start justify-between gap-3">
@@ -407,7 +489,9 @@ const SetupStore = () => {
           {DEMO_ITEMS.slice(0, 4).map((it) => (
             <div
               key={it.id}
-              className={`rounded-2xl border overflow-hidden ${isDarkMode ? "border-slate-800 bg-slate-950" : "border-gray-100 bg-white"}`}
+              className={`rounded-2xl border overflow-hidden ${
+                isDarkMode ? "border-slate-800 bg-slate-950" : "border-gray-100 bg-white"
+              }`}
             >
               <div className="h-14" style={{ backgroundColor: brand + "22" }} />
               <div className="p-3">
@@ -487,7 +571,7 @@ const SetupStore = () => {
                 Storefront Editor
               </h1>
               <p className={`text-[10px] font-black uppercase tracking-[0.2em] mt-2 ${ui.muted}`}>
-                Choose UI layout, color, and currency
+                Choose UI layout, color, currency, and category
               </p>
             </div>
           </div>
@@ -554,6 +638,45 @@ const SetupStore = () => {
                     <span className="uppercase tracking-widest font-black">Live Preview</span>
                   </div>
                 </div>
+              </div>
+
+              {/* ✅ NEW: Business Category */}
+              <div className="grid grid-cols-1 gap-3">
+                <label className={`text-[11px] font-black uppercase tracking-widest flex items-center gap-2 ${ui.accent}`}>
+                  <ListPlus size={14} /> Business Category
+                </label>
+
+                <select
+                  className={`w-full p-4 rounded-xl font-bold shadow-sm outline-none appearance-none ${ui.select} ${ui.card} border`}
+                  value={formData.business_category_value}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      business_category_value: e.target.value as BusinessCategoryValue,
+                      business_category_custom: e.target.value === "other" ? prev.business_category_custom : "",
+                    }))
+                  }
+                  style={{ color: isDarkMode ? "#E2E8F0" : "#111827" }}
+                >
+                  {BUSINESS_CATEGORIES.map((c) => (
+                    <option key={c.value} value={c.value} style={{ color: "#111827" }}>
+                      {c.en}
+                    </option>
+                  ))}
+                </select>
+
+                {formData.business_category_value === "other" && (
+                  <input
+                    className={`w-full p-4 rounded-xl font-bold shadow-sm transition-all outline-none ${ui.input} ${ui.card} border`}
+                    placeholder="Type your business category..."
+                    value={formData.business_category_custom}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, business_category_custom: e.target.value }))}
+                  />
+                )}
+
+                <p className={`text-[10px] font-bold ${ui.muted}`}>
+                  Choose the category that best fits your business. If not listed, select “Other”.
+                </p>
               </div>
             </div>
 
@@ -637,18 +760,37 @@ const SetupStore = () => {
       </div>
 
       {/* RIGHT */}
-      <div className={`hidden lg:flex flex-1 items-center justify-center p-12 border-l ${ui.rightPanel}`}>
-        <div className={`w-full max-w-[320px] aspect-[9/19] rounded-[3rem] p-3 shadow-2xl border-[8px] relative ${ui.phoneShell} ${ui.phoneBezel}`}>
-          <div className={`w-full h-full rounded-[2.2rem] overflow-hidden flex flex-col ${isDarkMode ? "bg-slate-950" : "bg-white"}`}>
+      <div className={`hidden lg:flex flex-1 items-center justify-center p-8 xl:p-12 border-l ${ui.rightPanel}`}>
+        {/* ✅ BIGGER PHONE (responsive) */}
+        <div
+          className={`w-full max-w-[320px] xl:max-w-[360px] aspect-[9/19] rounded-[3.5rem] p-3 shadow-2xl border-[10px] relative ${ui.phoneShell} ${ui.phoneBezel}`}
+        >
+          <div className={`w-full h-full rounded-[2.6rem] overflow-hidden flex flex-col ${isDarkMode ? "bg-slate-950" : "bg-white"}`}>
             <PreviewHeader />
 
             <div className={`flex-1 overflow-y-auto ${isDarkMode ? "bg-[#0B1220]" : "bg-[#F7F8FC]"}`}>
-              <div className="px-5 pt-4 flex items-center justify-between">
+              {/* ✅ Add category in live preview */}
+              <div className="px-5 pt-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className={`text-[10px] font-black uppercase tracking-[0.22em] ${ui.muted}`}>
+                    Layout:{" "}
+                    <span className={isDarkMode ? "text-slate-200" : "text-gray-700"}>
+                      {theme}
+                    </span>
+                  </p>
+                  <p className={`text-[10px] font-black uppercase tracking-[0.22em] ${ui.muted}`}>
+                    Currency:{" "}
+                    <span className={isDarkMode ? "text-slate-200" : "text-gray-700"}>
+                      {currency}
+                    </span>
+                  </p>
+                </div>
+
                 <p className={`text-[10px] font-black uppercase tracking-[0.22em] ${ui.muted}`}>
-                  Layout: <span className={isDarkMode ? "text-slate-200" : "text-gray-700"}>{theme}</span>
-                </p>
-                <p className={`text-[10px] font-black uppercase tracking-[0.22em] ${ui.muted}`}>
-                  Currency: <span className={isDarkMode ? "text-slate-200" : "text-gray-700"}>{currency}</span>
+                  Category:{" "}
+                  <span className={isDarkMode ? "text-slate-200" : "text-gray-700"}>
+                    {previewCategory}
+                  </span>
                 </p>
               </div>
 

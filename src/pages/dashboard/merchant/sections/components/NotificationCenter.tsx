@@ -3,8 +3,10 @@ import { supabase } from '../../../../../lib/supabaseClient';
 import { useAuth } from '../../../../../contexts/AuthContext';
 import { Bell, BellRing, CheckCheck, Check, Calendar, Package, Info, Sparkles, Circle } from 'lucide-react';
 
+import { useMerchantLang } from '../../useMerchantLang';
 const NotificationCenter = () => {
   const { user } = useAuth();
+  const { t, dir } = useMerchantLang();
   const [notifications, setNotifications] = useState<any[]>([]);
   const [isOpen, setIsOpen] = useState(false);
 
@@ -62,7 +64,7 @@ const NotificationCenter = () => {
   };
 
   return (
-    <div className="relative" dir="ltr">
+    <div className="relative" dir={dir}>
       <button
         onClick={() => setIsOpen(!isOpen)}
         className={`relative p-3 rounded-2xl transition-all active:scale-90 ${
