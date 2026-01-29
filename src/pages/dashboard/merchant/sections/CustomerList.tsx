@@ -149,7 +149,35 @@ export default function CustomerList() {
         }))
         .sort((a, b) => new Date(b.last_visit || 0 as any).getTime() - new Date(a.last_visit || 0 as any).getTime());
 
-      setRows(list);
+      
+      // Loyalty points (read-only) from loyalty_accounts for this merchant
+      try {
+        const { data: laData, error: laErr } = await supabase
+          .from('loyalty_accounts')
+          .select('customer_id, points_balance')
+          .eq('merchant_id', user.id);
+
+        if (laErr) throw laErr;
+
+        const pointsMap = new Map<string, number>();
+        for (const r of (laData || []) as any[]) {
+          const cid = String(r.customer_id);
+          const pts = Number(r.points_balance || 0);
+          // in case duplicates, keep the max
+          const prev = pointsMap.get(cid);
+          if (prev == null || pts > prev) pointsMap.set(cid, pts);
+        }
+
+        for (const c of list) {
+          const pts = pointsMap.get(c.id);
+          if (pts != null) c.loyalty_points = pts;
+        }
+      } catch (loyaltyErr: any) {
+        // ignore loyalty points fetch errors (keep existing values)
+        console.warn('loyalty_accounts fetch failed:', loyaltyErr?.message || loyaltyErr);
+      }
+
+setRows(list);
     } catch (err: any) {
       console.error("fetchCRM error:", err?.message || err);
       setRows([]);
