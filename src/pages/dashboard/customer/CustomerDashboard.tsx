@@ -59,6 +59,58 @@ type CartSummary = {
   currency: string;
 };
 
+
+
+type LoyaltyAccountRow = {
+  id: string;
+  merchant_id: string;
+  customer_id: string;
+  program_id: string;
+  points_balance: number | null;
+  lifetime_points: number | null;
+  current_tier_id: string | null;
+  last_activity_at?: string | null;
+  updated_at?: string | null;
+  created_at?: string | null;
+};
+
+type LoyaltyTierRow = {
+  id: string;
+  name: string | null;
+  rank: number | null;
+  points_threshold: number | null;
+};
+
+type LoyaltyRewardRow = {
+  id: string;
+  program_id: string;
+  title: string;
+  type: string;
+  points_cost: number;
+  is_active: boolean;
+  created_at?: string | null;
+};
+
+type LoyaltyTxnRow = {
+  id: string;
+  merchant_id: string;
+  program_id: string;
+  txn_type: string;
+  points_delta: number;
+  amount: number | null;
+  currency_code: string | null;
+  reference_type: string | null;
+  reference_id: string | null;
+  note: string | null;
+  created_at: string;
+};
+
+type MerchantPublicRow = {
+  id: string;
+  store_name: string | null;
+  store_slug: string | null;
+};
+
 const cx = (...classes: Array<string | false | null | undefined>) => classes.filter(Boolean).join(" ");
 
 function formatDate(iso: string) {
@@ -955,6 +1007,583 @@ function CustomerNotifications({
 }
 
 
+
+function CustomerLoyalty({
+  t,
+  userId,
+  isDarkMode,
+}: {
+  t: (en: string, ar: string) => string;
+  userId: string;
+  isDarkMode: boolean;
+}) {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string>("");
+
+  const [accounts, setAccounts] = useState<
+    Array<
+      LoyaltyAccountRow & {
+        merchant?: MerchantPublicRow | null;
+        tier?: LoyaltyTierRow | null;
+      }
+    >
+  >([]);
+
+  const [selectedKey, setSelectedKey] = useState<string>(""); // merchant_id::program_id
+  const selected = useMemo(() => {
+    if (!selectedKey) return null;
+    return accounts.find((a) => `${a.merchant_id}::${a.program_id}` === selectedKey) || null;
+  }, [accounts, selectedKey]);
+
+  const [rewardsLoading, setRewardsLoading] = useState(false);
+  const [rewardsError, setRewardsError] = useState<string>("");
+  const [rewards, setRewards] = useState<LoyaltyRewardRow[]>([]);
+
+  const [txLoading, setTxLoading] = useState(false);
+  const [txError, setTxError] = useState<string>("");
+  const [txs, setTxs] = useState<LoyaltyTxnRow[]>([]);
+
+  const [actionMsg, setActionMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+
+  const pillCls = (kind: "ok" | "err") =>
+    cx(
+      "rounded-2xl border px-4 py-3 text-sm font-bold",
+      kind === "ok"
+        ? isDarkMode
+          ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-200"
+          : "bg-emerald-50 border-emerald-200 text-emerald-700"
+        : isDarkMode
+        ? "bg-rose-500/10 border-rose-500/20 text-rose-200"
+        : "bg-rose-50 border-rose-200 text-rose-700"
+    );
+
+  const loadAccounts = async () => {
+    setLoading(true);
+    setError("");
+    setActionMsg(null);
+
+    try {
+      const { data: laRows, error: laErr } = await supabase
+        .from("loyalty_accounts")
+        .select(
+          "id, merchant_id, customer_id, program_id, points_balance, lifetime_points, current_tier_id, last_activity_at, updated_at, created_at"
+        )
+        .eq("customer_id", userId)
+        .order("updated_at", { ascending: false });
+
+      if (laErr) throw new Error(laErr.message);
+
+      const base = ((laRows as any) || []) as LoyaltyAccountRow[];
+      if (!base.length) {
+        setAccounts([]);
+        setSelectedKey("");
+        return;
+      }
+
+      const tierIds = Array.from(new Set(base.map((a) => a.current_tier_id).filter(Boolean))) as string[];
+      let tiersById: Record<string, LoyaltyTierRow> = {};
+      if (tierIds.length) {
+        const { data: tierRows, error: tierErr } = await supabase
+          .from("loyalty_tiers")
+          .select("id, name, rank, points_threshold")
+          .in("id", tierIds);
+        if (!tierErr && Array.isArray(tierRows)) {
+          for (const r of tierRows as any[]) tiersById[String(r.id)] = r as LoyaltyTierRow;
+        }
+      }
+
+      const merchantIds = Array.from(new Set(base.map((a) => a.merchant_id).filter(Boolean))) as string[];
+      let merchantsById: Record<string, MerchantPublicRow> = {};
+      if (merchantIds.length) {
+        const { data: spRows, error: spErr } = await supabase
+          .from("store_public")
+          .select("id, store_name, store_slug")
+          .in("id", merchantIds);
+
+        if (!spErr && Array.isArray(spRows)) {
+          for (const r of spRows as any[]) merchantsById[String(r.id)] = r as MerchantPublicRow;
+        }
+      }
+
+      const merged = base.map((a) => ({
+        ...a,
+        tier: a.current_tier_id ? tiersById[String(a.current_tier_id)] || null : null,
+        merchant: merchantsById[String(a.merchant_id)] || null,
+      }));
+
+      setAccounts(merged);
+
+      const first = merged[0];
+      const key = `${first.merchant_id}::${first.program_id}`;
+      setSelectedKey((prev) => prev || key);
+    } catch (e: any) {
+      setError(e?.message || t("Failed to load loyalty.", "فشل تحميل الولاء."));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadRewardsAndTx = async (merchantId: string, programId: string) => {
+    setRewardsLoading(true);
+    setRewardsError("");
+    setRewards([]);
+    setTxLoading(true);
+    setTxError("");
+    setTxs([]);
+    setActionMsg(null);
+
+    try {
+      const rewardsReq = supabase
+        .from("loyalty_rewards")
+        .select("id, program_id, title, type, points_cost, is_active, created_at")
+        .eq("program_id", programId)
+        .eq("is_active", true)
+        .order("points_cost", { ascending: true });
+
+      const txReq = supabase
+        .from("loyalty_transactions")
+        .select(
+          "id, merchant_id, program_id, txn_type, points_delta, amount, currency_code, reference_type, reference_id, note, created_at"
+        )
+        .eq("customer_id", userId)
+        .eq("merchant_id", merchantId)
+        .eq("program_id", programId)
+        .order("created_at", { ascending: false })
+        .limit(20);
+
+      const [rRes, txRes] = await Promise.all([rewardsReq, txReq]);
+
+      if (rRes.error) throw new Error(rRes.error.message);
+      if (txRes.error) {
+        const m = String(txRes.error.message || "");
+        // If the customer role doesn't have SELECT on loyalty_transactions, don't break the page.
+        if (m.toLowerCase().includes("permission denied")) {
+          setTxs([]);
+        } else {
+          throw new Error(m);
+        }
+      }
+
+      setRewards(((rRes.data as any) || []) as LoyaltyRewardRow[]);
+      setTxs(((txRes.data as any) || []) as LoyaltyTxnRow[]);
+    } catch (e: any) {
+      const msg = e?.message || t("Failed to load details.", "فشل تحميل التفاصيل.");
+      setRewardsError(msg);
+      setTxError(msg);
+    } finally {
+      setRewardsLoading(false);
+      setTxLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!userId) return;
+    loadAccounts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId]);
+
+  useEffect(() => {
+    if (!selected) return;
+    loadRewardsAndTx(selected.merchant_id, selected.program_id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedKey]);
+
+  const redeem = async (reward: LoyaltyRewardRow) => {
+    setActionMsg(null);
+    if (!selected) return;
+
+    // 1) Try the RPC if it exists
+    try {
+      const { data, error } = await supabase.rpc("redeem_reward", { p_reward_id: reward.id });
+      if (error) throw error;
+
+      setActionMsg({
+        type: "ok",
+        text:
+          typeof data === "string"
+            ? data
+            : t("Redeemed successfully.", "تم الاستبدال بنجاح."),
+      });
+
+      // refresh UI
+      await loadAccounts();
+        await loadRewardsAndTx(selected.merchant_id, selected.program_id);
+      return;
+    } catch (e: any) {
+      const msg = String(e?.message || e || "");
+
+    // If the DB RPC is outdated/mismatched (common after schema tweaks), show a clear message
+    if (msg.includes('record "v_reward" has no field "merchant_id"')) {
+      setActionMsg({
+        type: "err",
+        text:
+          msg +
+          " — DB function redeem_reward is outdated. Drop & recreate redeem_reward with merchant_id resolved (join rewards -> programs).",
+      });
+      return;
+    }
+
+      // If the RPC fails because it doesn't insert account_id / program_id properly,
+      // fall back to a safe client-side redeem (NO schema changes needed).
+      const shouldFallback =
+        msg.includes('null value in column "account_id"') ||
+        msg.includes('null value in column "program_id"') ||
+        msg.includes('null value in column "merchant_id"') ||
+        msg.includes('null value in column "customer_id"') ||
+        msg.includes("loyalty_transactions") ||
+        msg.includes("loyalty_accounts");
+
+      if (!shouldFallback) {
+        setActionMsg({
+          type: "err",
+          text: msg || t("Redeem failed.", "فشل الاستبدال."),
+        });
+        return;
+      }
+
+      // 2) Client-side redeem (writes correctly to loyalty_transactions + updates balance)
+      try {
+        const cost = Number(reward.points_cost ?? 0);
+        if (!cost || cost <= 0) {
+          throw new Error(t("Invalid reward cost.", "تكلفة المكافأة غير صحيحة."));
+        }
+
+        if ((selected.points_balance ?? 0) < cost) {
+          throw new Error(t("Not enough points.", "نقاطك غير كافية."));
+        }
+
+        // currency_code is required on loyalty_transactions; get it from the program (fallback to EGP)
+        let currency = "EGP";
+        if (selected.program_id) {
+          const { data: programRow } = await supabase
+            .from("loyalty_programs")
+            .select("currency_code")
+            .eq("id", selected.program_id)
+            .maybeSingle();
+          if (programRow?.currency_code) currency = programRow.currency_code;
+        }
+
+        // Insert transaction (txn_type must match your enum; we use 'redeem_points' like existing history)
+        const { error: txnErr } = await supabase.from("loyalty_transactions").insert({
+          account_id: selected.id,
+          program_id: selected.program_id,
+          merchant_id: selected.merchant_id,
+          customer_id: (selected as any).customer_id,
+          txn_type: "redeem_points",
+          points_delta: -cost,
+          amount: 0,
+          currency_code: currency,
+          reference_type: "reward",
+          reference_id: reward.id,
+                        note: `Redeemed reward: ${String((reward as any)?.title ?? "").trim()}`.trim(),
+          meta: {},
+        });
+
+        if (txnErr) throw new Error(txnErr.message);
+
+        // Update account balance
+        const newBalance = Number(selected.points_balance ?? 0) - cost;
+        const { error: accErr } = await supabase
+          .from("loyalty_accounts")
+          .update({
+            points_balance: newBalance,
+            last_activity_at: new Date().toISOString(),
+          })
+          .eq("id", selected.id);
+
+        if (accErr) throw new Error(accErr.message);
+
+        setActionMsg({
+          type: "ok",
+          text: t("Redeemed successfully.", "تم الاستبدال بنجاح."),
+        });
+
+        await loadAccounts();
+        await loadRewardsAndTx(selected.merchant_id, selected.program_id);
+      } catch (inner: any) {
+        setActionMsg({
+          type: "err",
+          text: String(inner?.message || inner || t("Redeem failed.", "فشل الاستبدال.")),
+        });
+      }
+    }
+  };
+
+  if (loading) {
+    return (
+      <SectionCard title={t("Loyalty", "الولاء")}>
+        <div className="flex items-center gap-3">
+          <div
+            className={cx(
+              "w-6 h-6 border-4 rounded-full animate-spin",
+              isDarkMode ? "border-indigo-400 border-t-transparent" : "border-indigo-600 border-t-transparent"
+            )}
+          />
+          <p
+            className={cx(
+              "text-[10px] font-black uppercase tracking-widest",
+              isDarkMode ? "text-indigo-300" : "text-indigo-600"
+            )}
+          >
+            {t("Loading...", "جاري التحميل...")}
+          </p>
+        </div>
+      </SectionCard>
+    );
+  }
+
+  if (error) {
+    return (
+      <SectionCard title={t("Loyalty", "الولاء")}>
+        <div className={cx(
+          "rounded-2xl border px-4 py-3 text-sm font-bold",
+          isDarkMode
+            ? "bg-rose-500/10 border-rose-500/20 text-rose-200"
+            : "bg-rose-50 border-rose-200 text-rose-700"
+        )}>
+          {error}
+        </div>
+        <button
+          onClick={loadAccounts}
+          className="mt-5 inline-flex items-center gap-2 px-5 py-3 rounded-2xl bg-black text-white hover:bg-slate-800 font-black text-xs uppercase tracking-widest dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100"
+        >
+          <RefreshCcw size={16} />
+          {t("Retry", "إعادة")}
+        </button>
+      </SectionCard>
+    );
+  }
+
+  if (!accounts.length) {
+    return (
+      <EmptyState
+        title={t("No loyalty yet", "لا يوجد ولاء بعد")}
+        subtitle={t(
+          "Once you place a paid order with a merchant that has a loyalty program, your points will appear here.",
+          "بعد ما تعمل طلب مدفوع عند تاجر عنده برنامج ولاء، نقاطك هتظهر هنا."
+        )}
+        icon={<Coins className="text-slate-900 dark:text-slate-100" size={18} />}
+      />
+    );
+  }
+
+  const selectedMerchantName = selected?.merchant?.store_name || t("Merchant", "التاجر");
+
+  return (
+    <div className="space-y-6">
+      <TopBar
+        title={t("Loyalty", "الولاء")}
+        right={
+          <button
+            onClick={loadAccounts}
+            className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl bg-black text-white hover:bg-slate-800 font-black text-xs uppercase tracking-widest dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100"
+            title={t("Refresh", "تحديث")}
+          >
+            <RefreshCcw size={16} />
+            {t("Refresh", "تحديث")}
+          </button>
+        }
+      />
+
+      {actionMsg && (
+        <div className={pillCls(actionMsg.type)}>{actionMsg.text}</div>
+      )}
+
+      <SectionCard title={t("My merchants", "تجّاري")}>
+        <div className="grid gap-4 md:grid-cols-2">
+          <div>
+            <div className={cx("text-[11px] font-black uppercase tracking-[0.25em]", isDarkMode ? "text-slate-300" : "text-slate-600")}>
+              {t("Select merchant program", "اختر برنامج التاجر")}
+            </div>
+            <select
+              value={selectedKey}
+              onChange={(e) => setSelectedKey(e.target.value)}
+              className={cx(
+                "mt-2 w-full px-4 py-3 rounded-2xl border text-sm font-bold outline-none transition",
+                isDarkMode
+                  ? "bg-slate-950/30 border-slate-900/60 text-slate-100 focus:border-slate-700"
+                  : "bg-white border-slate-200 text-slate-900 focus:border-slate-300"
+              )}
+            >
+              {accounts.map((a) => {
+                const name = a.merchant?.store_name || t("Merchant", "التاجر");
+                const pts = Number(a.points_balance ?? 0) || 0;
+                return (
+                  <option key={`${a.merchant_id}::${a.program_id}`} value={`${a.merchant_id}::${a.program_id}`}>
+                    {name} — {t("Points", "نقاط")}: {pts}
+                  </option>
+                );
+              })}
+            </select>
+
+            {selected?.merchant?.store_slug ? (
+              <p className={cx("mt-3 text-xs font-bold", isDarkMode ? "text-slate-400" : "text-slate-600")}>
+                {t("Store", "المتجر")}:{" "}
+                <a
+                  className="text-indigo-600 hover:text-indigo-700 dark:text-indigo-300 dark:hover:text-indigo-200"
+                  href={`/s/${selected.merchant.store_slug}`}
+                >
+                  /s/{selected.merchant.store_slug}
+                </a>
+              </p>
+            ) : null}
+          </div>
+
+          <div className={cx("rounded-2xl border p-5", isDarkMode ? "border-slate-900/60 bg-slate-950/20" : "border-slate-200 bg-white")}>
+            <p className={cx("text-[10px] font-black uppercase tracking-[0.25em]", isDarkMode ? "text-slate-400" : "text-slate-500")}>
+              {t("Selected", "المحدد")}
+            </p>
+            <p className={cx("mt-2 text-lg font-black", isDarkMode ? "text-slate-50" : "text-slate-900")}>
+              {selectedMerchantName}
+            </p>
+
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <div className={cx("rounded-2xl border p-4", isDarkMode ? "border-slate-900/60 bg-slate-950/30" : "border-slate-200 bg-slate-50")}>
+                <p className={cx("text-[10px] font-black uppercase tracking-[0.25em]", isDarkMode ? "text-slate-400" : "text-slate-500")}>
+                  {t("Points", "النقاط")}
+                </p>
+                <p className={cx("mt-1 text-2xl font-black", isDarkMode ? "text-slate-50" : "text-slate-900")}>
+                  {Number(selected?.points_balance ?? 0) || 0}
+                </p>
+              </div>
+
+              <div className={cx("rounded-2xl border p-4", isDarkMode ? "border-slate-900/60 bg-slate-950/30" : "border-slate-200 bg-slate-50")}>
+                <p className={cx("text-[10px] font-black uppercase tracking-[0.25em]", isDarkMode ? "text-slate-400" : "text-slate-500")}>
+                  {t("Tier", "المستوى")}
+                </p>
+                <p className={cx("mt-1 text-2xl font-black truncate", isDarkMode ? "text-slate-50" : "text-slate-900")}>
+                  {selected?.tier?.name || t("—", "—")}
+                </p>
+              </div>
+            </div>
+
+            <p className={cx("mt-3 text-xs font-bold", isDarkMode ? "text-slate-400" : "text-slate-600")}>
+              {t("Lifetime points", "إجمالي النقاط")}:{" "}
+              <span className={cx("font-black", isDarkMode ? "text-slate-200" : "text-slate-900")}>
+                {Number(selected?.lifetime_points ?? 0) || 0}
+              </span>
+            </p>
+          </div>
+        </div>
+      </SectionCard>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <SectionCard title={t("Rewards", "المكافآت")}>
+          {rewardsLoading ? (
+            <p className="text-sm text-slate-600 dark:text-slate-400">{t("Loading rewards...", "جاري تحميل المكافآت...")}</p>
+          ) : rewardsError ? (
+            <div className={pillCls("err")}>{rewardsError}</div>
+          ) : !rewards.length ? (
+            <p className="text-sm text-slate-600 dark:text-slate-400">{t("No rewards available.", "لا توجد مكافآت متاحة.")}</p>
+          ) : (
+            <div className="space-y-3">
+              {rewards.map((r) => {
+                const cost = Number(r.points_cost ?? 0) || 0;
+                const canRedeem = (Number(selected?.points_balance ?? 0) || 0) >= cost;
+                return (
+                  <div
+                    key={r.id}
+                    className={cx(
+                      "p-4 rounded-2xl border",
+                      isDarkMode ? "border-slate-900/60 bg-slate-950/20" : "border-slate-200 bg-white"
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0">
+                        <p className={cx("font-black truncate", isDarkMode ? "text-slate-50" : "text-slate-900")}>
+                          {r.title}
+                        </p>
+                        <p className={cx("mt-1 text-sm", isDarkMode ? "text-slate-400" : "text-slate-600")}>
+                          {t("Type", "النوع")}:{" "}
+                          <span className={cx("font-black", isDarkMode ? "text-slate-200" : "text-slate-800")}>
+                            {String(r.type || "").toUpperCase()}
+                          </span>
+                          {" · "}
+                          {t("Cost", "التكلفة")}:{" "}
+                          <span className={cx("font-black", isDarkMode ? "text-slate-200" : "text-slate-800")}>
+                            {cost}
+                          </span>{" "}
+                          {t("points", "نقطة")}
+                        </p>
+                      </div>
+
+                      <button
+                        onClick={() => redeem(r)}
+                        disabled={!canRedeem}
+                        className={cx(
+                          "shrink-0 inline-flex items-center gap-2 px-5 py-3 rounded-2xl text-xs font-black uppercase tracking-widest border transition",
+                          canRedeem
+                            ? isDarkMode
+                              ? "bg-white text-slate-900 hover:bg-slate-100 border-white/20"
+                              : "bg-black text-white hover:bg-slate-900 border-black/10"
+                            : isDarkMode
+                            ? "bg-slate-950/20 text-slate-500 border-slate-900/60 cursor-not-allowed"
+                            : "bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed"
+                        )}
+                        title={canRedeem ? t("Redeem", "استبدال") : t("Not enough points", "نقاط غير كافية")}
+                      >
+                        <Coins size={16} />
+                        {t("Redeem", "استبدال")}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </SectionCard>
+
+        <SectionCard title={t("History", "السجل")}>
+          {txLoading ? (
+            <p className="text-sm text-slate-600 dark:text-slate-400">{t("Loading history...", "جاري تحميل السجل...")}</p>
+          ) : txError ? (
+            <div className={pillCls("err")}>{txError}</div>
+          ) : !txs.length ? (
+            <p className="text-sm text-slate-600 dark:text-slate-400">{t("No activity yet.", "لا توجد عمليات بعد.")}</p>
+          ) : (
+            <div className="space-y-3">
+              {txs.map((x) => (
+                <div
+                  key={x.id}
+                  className={cx(
+                    "p-4 rounded-2xl border",
+                    isDarkMode ? "border-slate-900/60 bg-slate-950/20" : "border-slate-200 bg-white"
+                  )}
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className={cx("font-black truncate", isDarkMode ? "text-slate-50" : "text-slate-900")}>
+                        {x.note || t("Loyalty transaction", "عملية ولاء")}
+                      </p>
+                      <p className={cx("mt-1 text-sm truncate", isDarkMode ? "text-slate-400" : "text-slate-600")}>
+                        <span className={cx("font-black", isDarkMode ? "text-slate-200" : "text-slate-800")}>
+                          {String(x.txn_type).split("_").join(" ").toUpperCase()}
+                        </span>
+                        {" · "}
+                        {formatDate(x.created_at)}
+                      </p>
+                    </div>
+
+                    <div className="shrink-0 text-right">
+                      <p className={cx("text-lg font-black", isDarkMode ? "text-slate-50" : "text-slate-900")}>
+                        {x.points_delta > 0 ? `+${x.points_delta}` : `${x.points_delta}`}
+                      </p>
+                      <p className={cx("text-[11px] font-bold", isDarkMode ? "text-slate-400" : "text-slate-600")}>
+                        {t("points", "نقطة")}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </SectionCard>
+      </div>
+    </div>
+  );
+}
+
+
 function CustomerSettings({
   t,
   lang,
@@ -1161,202 +1790,241 @@ function CustomerSettings({
             </div>
           </div>
         ) : (
-          <div className="grid gap-6 lg:grid-cols-2">
-            {/* Profile */}
-            <div className={cx("rounded-2xl border p-6", isDarkMode ? "border-slate-900/60 bg-slate-950/20" : "border-slate-200 bg-white")}>
-              <div className="flex items-center gap-3">
-                <div className={cx("h-10 w-10 rounded-2xl grid place-items-center border", isDarkMode ? "border-slate-900/60 bg-slate-950/30" : "border-slate-200 bg-slate-50")}>
-                  <UserCircle size={18} />
-                </div>
-                <div>
-                  <p className={cx("text-sm font-black uppercase tracking-widest", isDarkMode ? "text-slate-100" : "text-slate-900")}>
-                    {t("Profile", "البيانات")}
+          
+            <><SectionCard title={t("Quick guide", "دليل سريع")}>
+              <div className={cx("space-y-2 text-sm", isDarkMode ? "text-slate-300" : "text-slate-700")}>
+                <div className="flex items-start gap-3">
+                  <div className={cx(
+                    "mt-1 size-6 rounded-full grid place-items-center text-[11px] font-black",
+                    isDarkMode ? "bg-slate-900/60 text-slate-100" : "bg-slate-100 text-slate-900"
+                  )}>1</div>
+                  <p className="leading-relaxed">
+                    {t(
+                      "Choose a store program from the dropdown — each store has its own points balance.",
+                      "اختار برنامج التاجر من القائمة — كل تاجر له رصيد نقاط مختلف."
+                    )}
                   </p>
-                  <p className={cx("text-xs font-bold", isDarkMode ? "text-slate-400" : "text-slate-600")}>
-                    {t("Update your personal info", "تحديث بياناتك")}
+                </div>
+
+                <div className="flex items-start gap-3">
+                  <div className={cx(
+                    "mt-1 size-6 rounded-full grid place-items-center text-[11px] font-black",
+                    isDarkMode ? "bg-slate-900/60 text-slate-100" : "bg-slate-100 text-slate-900"
+                  )}>2</div>
+                  <p className="leading-relaxed">
+                    {t(
+                      "Your points update automatically after orders become paid/completed.",
+                      "النقاط بتتحدث تلقائيًا بعد ما الطلب يبقى مدفوع/مكتمل."
+                    )}
+                  </p>
+                </div>
+
+                <div className="flex items-start gap-3">
+                  <div className={cx(
+                    "mt-1 size-6 rounded-full grid place-items-center text-[11px] font-black",
+                    isDarkMode ? "bg-slate-900/60 text-slate-100" : "bg-slate-100 text-slate-900"
+                  )}>3</div>
+                  <p className="leading-relaxed">
+                    {t(
+                      "If you have enough points, press Redeem to claim a reward. Your balance will decrease.",
+                      "لو معاك نقاط كفاية اضغط استبدال عشان تحصل على المكافأة — رصيدك هينقص."
+                    )}
                   </p>
                 </div>
               </div>
-
-              <div className="mt-6 space-y-4">
-                <div>
-                  <div className={labelCls}>{t("Name", "الاسم")}</div>
-                  <input value={fullName} onChange={(e) => setFullName(e.target.value)} className={inputCls} placeholder={t("Full name", "الاسم بالكامل")} />
-                </div>
-
-                <div>
-                  <div className={labelCls}>{t("Phone", "رقم الهاتف")}</div>
-                  <div className="relative">
-                    <Phone size={16} className={cx("absolute top-1/2 -translate-y-1/2", lang === "ar" ? "right-4" : "left-4", isDarkMode ? "text-slate-500" : "text-slate-400")} />
-                    <input
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      className={cx(inputCls, lang === "ar" ? "pr-10" : "pl-10")}
-                      placeholder={t("+20 10...", "+20 10...")}
-                    />
-                  </div>
-                </div>
-
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <div className={labelCls}>{t("Country", "الدولة")}</div>
-                    <div className="relative">
-                      <Globe size={16} className={cx("absolute top-1/2 -translate-y-1/2", lang === "ar" ? "right-4" : "left-4", isDarkMode ? "text-slate-500" : "text-slate-400")} />
-                      <select
-                        value={country}
-                        onChange={(e) => setCountry(e.target.value)}
-                        className={cx(inputCls, lang === "ar" ? "pr-10" : "pl-10")}
-                      >
-                        <option value="">{t("Select country", "اختر الدولة")}</option>
-                        {countryOptions.map((c) => (
-                          <option key={c.code} value={c.code}>
-                            {c.label}
-                          </option>
-                        ))}
-                      </select>
+            </SectionCard><div className="grid gap-6 lg:grid-cols-2">
+                {/* Profile */}
+                <div className={cx("rounded-2xl border p-6", isDarkMode ? "border-slate-900/60 bg-slate-950/20" : "border-slate-200 bg-white")}>
+                  <div className="flex items-center gap-3">
+                    <div className={cx("h-10 w-10 rounded-2xl grid place-items-center border", isDarkMode ? "border-slate-900/60 bg-slate-950/30" : "border-slate-200 bg-slate-50")}>
+                      <UserCircle size={18} />
+                    </div>
+                    <div>
+                      <p className={cx("text-sm font-black uppercase tracking-widest", isDarkMode ? "text-slate-100" : "text-slate-900")}>
+                        {t("Profile", "البيانات")}
+                      </p>
+                      <p className={cx("text-xs font-bold", isDarkMode ? "text-slate-400" : "text-slate-600")}>
+                        {t("Update your personal info", "تحديث بياناتك")}
+                      </p>
                     </div>
                   </div>
 
-                  <div>
-                    <div className={labelCls}>{t("Currency", "العملة")}</div>
-                    <div className="relative">
-                      <Coins size={16} className={cx("absolute top-1/2 -translate-y-1/2", lang === "ar" ? "right-4" : "left-4", isDarkMode ? "text-slate-500" : "text-slate-400")} />
-                      <select
-                        value={currency}
-                        onChange={(e) => setCurrency(e.target.value)}
-                        className={cx(inputCls, lang === "ar" ? "pr-10" : "pl-10")}
-                      >
-                        {(currenciesForCountry.length ? currenciesForCountry : [currency || ""]).filter(Boolean).map((cur) => (
-                          <option key={cur} value={cur}>
-                            {cur}
-                          </option>
-                        ))}
-                        {!currenciesForCountry.length && !currency && <option value="">{t("Select", "اختر")}</option>}
-                      </select>
+                  <div className="mt-6 space-y-4">
+                    <div>
+                      <div className={labelCls}>{t("Name", "الاسم")}</div>
+                      <input value={fullName} onChange={(e) => setFullName(e.target.value)} className={inputCls} placeholder={t("Full name", "الاسم بالكامل")} />
                     </div>
+
+                    <div>
+                      <div className={labelCls}>{t("Phone", "رقم الهاتف")}</div>
+                      <div className="relative">
+                        <Phone size={16} className={cx("absolute top-1/2 -translate-y-1/2", lang === "ar" ? "right-4" : "left-4", isDarkMode ? "text-slate-500" : "text-slate-400")} />
+                        <input
+                          value={phone}
+                          onChange={(e) => setPhone(e.target.value)}
+                          className={cx(inputCls, lang === "ar" ? "pr-10" : "pl-10")}
+                          placeholder={t("+20 10...", "+20 10...")} />
+                      </div>
+                    </div>
+
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <div className={labelCls}>{t("Country", "الدولة")}</div>
+                        <div className="relative">
+                          <Globe size={16} className={cx("absolute top-1/2 -translate-y-1/2", lang === "ar" ? "right-4" : "left-4", isDarkMode ? "text-slate-500" : "text-slate-400")} />
+                          <select
+                            value={country}
+                            onChange={(e) => setCountry(e.target.value)}
+                            className={cx(inputCls, lang === "ar" ? "pr-10" : "pl-10")}
+                          >
+                            <option value="">{t("Select country", "اختر الدولة")}</option>
+                            {countryOptions.map((c) => (
+                              <option key={c.code} value={c.code}>
+                                {c.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className={labelCls}>{t("Currency", "العملة")}</div>
+                        <div className="relative">
+                          <Coins size={16} className={cx("absolute top-1/2 -translate-y-1/2", lang === "ar" ? "right-4" : "left-4", isDarkMode ? "text-slate-500" : "text-slate-400")} />
+                          <select
+                            value={currency}
+                            onChange={(e) => setCurrency(e.target.value)}
+                            className={cx(inputCls, lang === "ar" ? "pr-10" : "pl-10")}
+                          >
+                            {(currenciesForCountry.length ? currenciesForCountry : [currency || ""]).filter(Boolean).map((cur) => (
+                              <option key={cur} value={cur}>
+                                {cur}
+                              </option>
+                            ))}
+                            {!currenciesForCountry.length && !currency && <option value="">{t("Select", "اختر")}</option>}
+                          </select>
+                        </div>
+                        <p className={cx("mt-2 text-xs font-bold", isDarkMode ? "text-slate-400" : "text-slate-600")}>
+                          {t("Currency is linked to your country choice.", "العملة مرتبطة باختيار الدولة.")}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="pt-2 flex gap-3">
+                      <button onClick={saveProfile} className={btnCls} disabled={savingProfile}>
+                        {savingProfile ? t("Saving...", "جارِ الحفظ...") : t("Save profile", "حفظ البيانات")}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setMsg(null);
+                          // reload from DB quickly
+                          (async () => {
+                            setLoading(true);
+                            try {
+                              const { data, error } = await supabase
+                                .from("users")
+                                .select("full_name, phone, country, currency")
+                                .eq("id", userId)
+                                .single();
+                              if (error)
+                                throw error;
+                              setFullName((data as any)?.full_name || "");
+                              setPhone((data as any)?.phone || "");
+                              setCountry((data as any)?.country || "");
+                              setCurrency((data as any)?.currency || "");
+                            } catch (e: any) {
+                              setMsg({ type: "err", text: e?.message || t("Failed to reload.", "فشل إعادة التحميل.") });
+                            } finally {
+                              setLoading(false);
+                            }
+                          })();
+                        } }
+                        className={subtleBtnCls}
+                        disabled={savingProfile}
+                      >
+                        <RefreshCcw size={16} />
+                        {t("Reload", "إعادة تحميل")}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Account */}
+                <div className={cx("rounded-2xl border p-6", isDarkMode ? "border-slate-900/60 bg-slate-950/20" : "border-slate-200 bg-white")}>
+                  <div className="flex items-center gap-3">
+                    <div className={cx("h-10 w-10 rounded-2xl grid place-items-center border", isDarkMode ? "border-slate-900/60 bg-slate-950/30" : "border-slate-200 bg-slate-50")}>
+                      <Lock size={18} />
+                    </div>
+                    <div>
+                      <p className={cx("text-sm font-black uppercase tracking-widest", isDarkMode ? "text-slate-100" : "text-slate-900")}>
+                        {t("Account", "الحساب")}
+                      </p>
+                      <p className={cx("text-xs font-bold", isDarkMode ? "text-slate-400" : "text-slate-600")}>
+                        {t("Email & password", "البريد وكلمة السر")}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-6 space-y-4">
+                    <div>
+                      <div className={labelCls}>{t("Email", "البريد الإلكتروني")}</div>
+                      <div className="relative">
+                        <Mail size={16} className={cx("absolute top-1/2 -translate-y-1/2", lang === "ar" ? "right-4" : "left-4", isDarkMode ? "text-slate-500" : "text-slate-400")} />
+                        <input
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          className={cx(inputCls, lang === "ar" ? "pr-10" : "pl-10")}
+                          placeholder="name@email.com"
+                          type="email" />
+                      </div>
+                    </div>
+
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <div>
+                        <div className={labelCls}>{t("New password", "كلمة سر جديدة")}</div>
+                        <input
+                          value={newPassword}
+                          onChange={(e) => setNewPassword(e.target.value)}
+                          className={inputCls}
+                          placeholder={t("Min 6 chars", "6 حروف على الأقل")}
+                          type="password" />
+                      </div>
+                      <div>
+                        <div className={labelCls}>{t("Confirm password", "تأكيد كلمة السر")}</div>
+                        <input
+                          value={confirmPassword}
+                          onChange={(e) => setConfirmPassword(e.target.value)}
+                          className={inputCls}
+                          placeholder={t("Repeat password", "أعد كلمة السر")}
+                          type="password" />
+                      </div>
+                    </div>
+
+                    <div className="pt-2 flex gap-3">
+                      <button onClick={saveAuth} className={btnCls} disabled={savingAuth}>
+                        {savingAuth ? t("Saving...", "جارِ الحفظ...") : t("Save account", "حفظ الحساب")}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setMsg(null);
+                          setEmail(userEmail || "");
+                          setNewPassword("");
+                          setConfirmPassword("");
+                        } }
+                        className={subtleBtnCls}
+                        disabled={savingAuth}
+                      >
+                        <XCircle size={16} />
+                        {t("Reset", "إعادة ضبط")}
+                      </button>
+                    </div>
+
                     <p className={cx("mt-2 text-xs font-bold", isDarkMode ? "text-slate-400" : "text-slate-600")}>
-                      {t("Currency is linked to your country choice.", "العملة مرتبطة باختيار الدولة.")}
+                      {t("Email updates may require verification.", "تعديل البريد قد يحتاج تأكيد.")}
                     </p>
                   </div>
                 </div>
-
-                <div className="pt-2 flex gap-3">
-                  <button onClick={saveProfile} className={btnCls} disabled={savingProfile}>
-                    {savingProfile ? t("Saving...", "جارِ الحفظ...") : t("Save profile", "حفظ البيانات")}
-                  </button>
-                  <button
-                    onClick={() => {
-                      setMsg(null);
-                      // reload from DB quickly
-                      (async () => {
-                        setLoading(true);
-                        try {
-                          const { data, error } = await supabase
-                            .from("users")
-                            .select("full_name, phone, country, currency")
-                            .eq("id", userId)
-                            .single();
-                          if (error) throw error;
-                          setFullName((data as any)?.full_name || "");
-                          setPhone((data as any)?.phone || "");
-                          setCountry((data as any)?.country || "");
-                          setCurrency((data as any)?.currency || "");
-                        } catch (e: any) {
-                          setMsg({ type: "err", text: e?.message || t("Failed to reload.", "فشل إعادة التحميل.") });
-                        } finally {
-                          setLoading(false);
-                        }
-                      })();
-                    }}
-                    className={subtleBtnCls}
-                    disabled={savingProfile}
-                  >
-                    <RefreshCcw size={16} />
-                    {t("Reload", "إعادة تحميل")}
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Account */}
-            <div className={cx("rounded-2xl border p-6", isDarkMode ? "border-slate-900/60 bg-slate-950/20" : "border-slate-200 bg-white")}>
-              <div className="flex items-center gap-3">
-                <div className={cx("h-10 w-10 rounded-2xl grid place-items-center border", isDarkMode ? "border-slate-900/60 bg-slate-950/30" : "border-slate-200 bg-slate-50")}>
-                  <Lock size={18} />
-                </div>
-                <div>
-                  <p className={cx("text-sm font-black uppercase tracking-widest", isDarkMode ? "text-slate-100" : "text-slate-900")}>
-                    {t("Account", "الحساب")}
-                  </p>
-                  <p className={cx("text-xs font-bold", isDarkMode ? "text-slate-400" : "text-slate-600")}>
-                    {t("Email & password", "البريد وكلمة السر")}
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-6 space-y-4">
-                <div>
-                  <div className={labelCls}>{t("Email", "البريد الإلكتروني")}</div>
-                  <div className="relative">
-                    <Mail size={16} className={cx("absolute top-1/2 -translate-y-1/2", lang === "ar" ? "right-4" : "left-4", isDarkMode ? "text-slate-500" : "text-slate-400")} />
-                    <input
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className={cx(inputCls, lang === "ar" ? "pr-10" : "pl-10")}
-                      placeholder="name@email.com"
-                      type="email"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <div className={labelCls}>{t("New password", "كلمة سر جديدة")}</div>
-                    <input
-                      value={newPassword}
-                      onChange={(e) => setNewPassword(e.target.value)}
-                      className={inputCls}
-                      placeholder={t("Min 6 chars", "6 حروف على الأقل")}
-                      type="password"
-                    />
-                  </div>
-                  <div>
-                    <div className={labelCls}>{t("Confirm password", "تأكيد كلمة السر")}</div>
-                    <input
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      className={inputCls}
-                      placeholder={t("Repeat password", "أعد كلمة السر")}
-                      type="password"
-                    />
-                  </div>
-                </div>
-
-                <div className="pt-2 flex gap-3">
-                  <button onClick={saveAuth} className={btnCls} disabled={savingAuth}>
-                    {savingAuth ? t("Saving...", "جارِ الحفظ...") : t("Save account", "حفظ الحساب")}
-                  </button>
-                  <button
-                    onClick={() => {
-                      setMsg(null);
-                      setEmail(userEmail || "");
-                      setNewPassword("");
-                      setConfirmPassword("");
-                    }}
-                    className={subtleBtnCls}
-                    disabled={savingAuth}
-                  >
-                    <XCircle size={16} />
-                    {t("Reset", "إعادة ضبط")}
-                  </button>
-                </div>
-
-                <p className={cx("mt-2 text-xs font-bold", isDarkMode ? "text-slate-400" : "text-slate-600")}>
-                  {t("Email updates may require verification.", "تعديل البريد قد يحتاج تأكيد.")}
-                </p>
-              </div>
-            </div>
-          </div>
+              </div></>
         )}
       </SectionCard>
     </div>
@@ -1487,6 +2155,12 @@ export default function CustomerDashboard() {
                 {t("Notifications", "الإشعارات")}
               </NavLink>
 
+<NavLink to="/dashboard/customer/loyalty" className={({ isActive }) => ui.navItem(isActive)}>
+  <Coins size={16} />
+  {t("Loyalty", "الولاء")}
+</NavLink>
+
+
               <NavLink to="/dashboard/customer/settings" className={({ isActive }) => ui.navItem(isActive)}>
                 <Settings size={16} />
                 {t("Settings", "الإعدادات")}
@@ -1505,7 +2179,8 @@ export default function CustomerDashboard() {
               <Route index element={<CustomerHome t={t} userId={userId} isDarkMode={isDarkMode} onBrowse={() => navigate("/stores")} />} />
               <Route path="bookings" element={<CustomerBookings t={t} userId={userId} isDarkMode={isDarkMode} />} />
               <Route path="notifications" element={<CustomerNotifications t={t} userId={userId} isDarkMode={isDarkMode} />} />
-              <Route path="settings" element={<CustomerSettings t={t} lang={lang} userId={userId} isDarkMode={isDarkMode} userEmail={(user as any)?.email} />} />
+                            <Route path="loyalty" element={<CustomerLoyalty t={t} userId={userId} isDarkMode={isDarkMode} />} />
+<Route path="settings" element={<CustomerSettings t={t} lang={lang} userId={userId} isDarkMode={isDarkMode} userEmail={(user as any)?.email} />} />
               <Route path="*" element={<Navigate to="/dashboard/customer" replace />} />
             </Routes>
           </section>

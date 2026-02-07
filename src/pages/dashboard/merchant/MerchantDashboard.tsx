@@ -758,3 +758,6 @@ const MerchantDashboard = () => {
 };
 
 export default MerchantDashboard;
+
+
+// Loyalty UI additions: subscribers & recent redeems (read-only)
