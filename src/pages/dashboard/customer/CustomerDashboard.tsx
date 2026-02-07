@@ -542,8 +542,8 @@ function CustomerHome({
                 <p className="text-slate-900 dark:text-slate-50 font-black">{t("Cart", "السلة")}</p>
                 <p className="text-slate-600 dark:text-slate-400 text-sm mt-1">
                   {t(
-                    `${cartCount} item(s) • ${cartTotal.toFixed(2)} ${cartCurrency}`,
-                    `${cartCount} عنصر • ${cartTotal.toFixed(2)} ${cartCurrency}`
+                    `${cartCount} item(s)`,
+                    `${cartCount} عنصر`
                   )}
                 </p>
               </div>

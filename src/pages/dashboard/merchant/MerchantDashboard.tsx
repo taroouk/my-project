@@ -21,6 +21,7 @@ import {
   Moon,
   Sun,
   Languages,
+  Coins, // ✅ NEW (Loyalty)
 } from 'lucide-react';
 
 // ✅ NEW
@@ -35,6 +36,9 @@ import CustomerList from './sections/CustomerList';
 import Settings from './sections/Settings';
 import NotificationCenter from './sections/components/NotificationCenter';
 
+// ✅ NEW (Loyalty Settings page)
+import MerchantLoyaltySettings from './sections/MerchantLoyaltySettings';
+
 type TabId =
   | 'overview'
   | 'services'
@@ -42,6 +46,7 @@ type TabId =
   | 'bookings'
   | 'orders'
   | 'customers'
+  | 'loyalty' // ✅ NEW
   | 'settings';
 
 type Currency = 'SAR' | 'EGP' | 'AED' | 'USD';
@@ -69,6 +74,7 @@ const MerchantDashboard = () => {
         Appointments: 'Appointments',
         'Sales Ledger': 'Sales Ledger',
         CRM: 'CRM',
+        Loyalty: 'Loyalty', // ✅ NEW
         Settings: 'Settings',
 
         Refresh: 'Refresh',
@@ -125,6 +131,7 @@ const MerchantDashboard = () => {
         Appointments: 'المواعيد',
         'Sales Ledger': 'سجل المبيعات',
         CRM: 'العملاء',
+        Loyalty: 'الولاء', // ✅ NEW
         Settings: 'الإعدادات',
 
         Refresh: 'تحديث',
@@ -335,6 +342,7 @@ const MerchantDashboard = () => {
       { id: 'bookings' as const, label: t('Appointments'), icon: <Calendar size={20} /> },
       { id: 'orders' as const, label: t('Sales Ledger'), icon: <ShoppingBag size={20} /> },
       { id: 'customers' as const, label: t('CRM'), icon: <Users size={20} /> },
+      { id: 'loyalty' as const, label: t('Loyalty'), icon: <Coins size={20} /> }, // ✅ NEW
       { id: 'settings' as const, label: t('Settings'), icon: <SettingsIcon size={20} /> },
     ],
     [t]
@@ -484,6 +492,8 @@ const MerchantDashboard = () => {
         return <OrderList />;
       case 'customers':
         return <CustomerList />;
+      case 'loyalty': // ✅ NEW
+        return <MerchantLoyaltySettings />;
       case 'settings':
         return <Settings />;
       default:
